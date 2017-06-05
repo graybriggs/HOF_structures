@@ -532,11 +532,11 @@ bool Read_Link (std::fstream & file, char & element1, char & element2, int & id1
         id1 = std::stoi(str_num1);
 
 
-    std::string str_num2 = get_col_number(col1);
+    std::string str_num2 = get_col_number(col2);
     if (str_num2.size() == 0)
         return false;
     else
-        id2 = std::stoi(str_num1);
+        id2 = std::stoi(str_num2);
 
 
     return true;
@@ -561,21 +561,21 @@ bool Read_Hbond (std::fstream & file, Hbond& bond)
     // 1
     std::string str_num1 = get_col_number(col1);
     if (str_num1.size() == 0)
-        return false;
+        bond.donor_ind = 0;
     else
         bond.donor_ind = std::stoi(str_num1);
 
     // 2
-    std::string str_num2 = get_col_number(col1);
+    std::string str_num2 = get_col_number(col2);
     if (str_num2.size() == 0)
-        return false;
+        bond.atom_H_ind = 0;
     else
         bond.atom_H_ind = std::stoi(str_num2);
 
     // 3
     std::string str_num3 = get_col_number(col3);
     if (str_num3.size() == 0)
-        return false;
+        bond.acceptor_ind = 0;
     else
         bond.acceptor_ind = std::stoi(str_num3);
 
@@ -835,7 +835,7 @@ int main()
     Box box;
     std::map< Point3i, std::vector<Molecule>, Compare_Points3i > molecules; // 1st = box position, 2nd = molecules in the box
     std::vector<Hbond> Hbonds;
-    int num_structures = 2; //5688
+    int num_structures = 3; //5688
     std::vector<Graph> structures( num_structures );
     std::multimap< Decoration, int > map_structures;
     std::map<char,int> max_indices;
@@ -849,7 +849,7 @@ int main()
     {
         Hbonds.clear();
         molecules.clear();
-        std::cout<<"\nStructure "<<ind_structure + 1;
+        std::cout << "\n ------ Structure " << ind_structure + 1 << " ------\n";
         // st1: stage 1 is to extract data from cif, then find centres and angles in the orthogonal system
         Read_cif( data_folder + "T2_" + std::to_string( ind_structure + 1 ) + "_molGeom.cif", max_indices, box, molecules[ O3 ], Hbonds );
                 std::cout << "here" << std::endl;
@@ -885,7 +885,7 @@ int main()
             ind_mol0 = ( bond.donor_ind - 1 ) / max_indices[ 'N' ];
             ind_mol1 = ( bond.acceptor_ind - 1 ) / max_indices[ 'O' ];
             bond.Print();
-            std::cout<<" edge: "<<ind_mol0<<"->"<<ind_mol1; //<<" cells="<<cells;
+            std::cout << " edge: " << ind_mol0 << " -> " <<ind_mol1; //<<" cells="<<cells;
             std::vector<Point3i> cells{ O3 };
             if ( bond.shift != O3 ) cells.push_back( O3 - bond.shift );
             for ( auto cell : cells )
@@ -900,7 +900,7 @@ int main()
                 edge = boost::edge( v0, v1, graph );
                 if ( ! edge.second ) // the edge didn't exist
                 {
-                    std::cout<<"new";
+                    std::cout << "new";
                     Point3d arrow = molecules[ O3 ][ ind_mol1 ].centre - molecules[ O3 ][ ind_mol0 ].centre;
                     if ( bond.shift != O3 ) arrow += box.Abs_Position( bond.shift );
                     Edge e( arrow );
@@ -909,7 +909,7 @@ int main()
                 }
                 else
                 {
-                    std::cout<<"extra";
+                    std::cout << " extra ";
                     graph[ edge.first ].bonds.push_back( bond );
                 }
             }
