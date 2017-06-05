@@ -29,6 +29,7 @@
 #include <boost/graph/filtered_graph.hpp>
 
 //Eigen
+
 #include <eigen3/Eigen/LU>
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/SparseCore>
@@ -36,11 +37,18 @@
 typedef Eigen::VectorXd Vector;
 typedef Eigen::MatrixXd Matrix;
 
+
+
 // OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 using namespace cv;
+
+// debug
+
+#define DBG_PRINT(msg) std::cout << msg << std::endl;
+
 
 // Constants
 const Point3i O3(0, 0, 0);
@@ -57,8 +65,8 @@ const double max_angle_NHO = 100; // degrees
 const double tolerance_length = 1e-4;
 //const double tolerance_dist_HA = 1e-4;
 
-Point3d V (Vector v) { return Point3d( v(0), v(1), v(2) ); }
-Vector V (Point3d v) { Vector vector(3); vector << v.x, v.y, v.z; return vector; }
+Point3d V (Eigen::VectorXd v) { return Point3d( v(0), v(1), v(2) ); }
+Eigen::VectorXd V (Point3d v) { Eigen::VectorXd vector(3); vector << v.x, v.y, v.z; return vector; }
 
 class Index_Value
 {
@@ -206,7 +214,7 @@ public:
     bool internal = false; // flag of a molecule in the given box
     double carbon_angle_ver = 0, carbon_angle_hor = 0, oxygen_angle = 0;
     std::vector<Point3d> oxygen_rays;
-    
+
     Molecule () {}
     Molecule (int ind) { index = ind; internal = true; }
     Molecule (Molecule& molecule_old, Point3i cell_shift, Point3d abs_shift, int ind)
@@ -226,14 +234,14 @@ public:
             for ( int i = 0; i < it->second.size(); i++ )
                 it->second[i].point_abs += abs_shift;
     }
-    
+
     void Print ()
     {
         std::cout<<"\nv"<<index<<cell<<" centre="<<centre<<internal;
         //std::cout<<" C_ver="<<carbon_angle_ver<<" C_hor="<<carbon_angle_hor<<" O_angle="<<oxygen_angle;
         //for ( int i = 0; i < indices_NH.size(); i++ ) std::cout<<"N"<<indices_NH[i].first<<" <->"<<" H"<<indices_NH[i].second<<std::endl;
     }
-    
+
     void Shift (Point3d shift, Molecule& molecule_new)
     {
         // Copy angles
@@ -247,7 +255,7 @@ public:
             for ( int i = 0; i < it->second.size(); i++ )
                 it->second[i].point_abs += shift;
     }
-    
+
     void Find_Angles ()
     {
         carbon_axis = atoms['C'][0].point_abs - atoms['C'][13].point_abs;
@@ -275,7 +283,7 @@ public:
             double s = sin( carbon_angle_ver * M_PI / 180 );
             rotation += s * Cross_Product( a ) + (1-c) * Tensor_Product( a ); //std::cout<<"\nr="<<rotation;
         }
-        std::vector<Vector> oxygen_vectors( 3 );
+        std::vector<Eigen::VectorXd> oxygen_vectors( 3 );
         for ( int i = 0; i < 3; i++ ) oxygen_vectors[ i ] = rotation * V( oxygen_rays[ i ] );
         // Find 3 angles with oxygen rays
         int min_index = -1;
@@ -296,7 +304,7 @@ public:
         }
         else oxygen_angle = oxygen_angles[ min_index ];
     }
-    
+
     /*  bool Find_indices_NH()
      {
      indices_NH.assign( atoms['N'].size(), -2 );
@@ -426,7 +434,7 @@ bool Read_Until_Section (std::fstream& file, int section)
         if ( ! std::getline( file, line ) ) return false;
         std::istringstream stream( line );
         stream >> col1 >> col2;
-        
+
     }
     return true;
 }
@@ -490,6 +498,18 @@ bool Read_idxyz (std::fstream& file, std::string& id, double& x, double& y, doub
     return true;
 }
 
+
+std::string get_col_number(std::string& str) {
+
+    std::string data = "";
+
+    for (auto a = std::begin(str) + 1; a != std::end(str); ++a) {
+        data += *a;
+    }
+    //DBG_PRINT(data + "\n")
+    return data;
+}
+
 //Read links between atoms within one molecule
 bool Read_Link (std::fstream & file, char & element1, char & element2, int & id1, int & id2)
 {
@@ -498,11 +518,27 @@ bool Read_Link (std::fstream & file, char & element1, char & element2, int & id1
     std::istringstream stream( line );
     stream >> col1;
     if ( col1 == "" ) return false; // finished reading this section
+        //std::cout << "--> " << get_col_number(col1) << std::endl;
     stream >> col2;
     element1 = col1[0]; // the first character in the string is the chemical element
     element2 = col2[0];
-    id1 = std::stoi( col1.erase(0,1) ); // extract the integer index after the element character
-    id2 = std::stoi( col2.erase(0,1) );
+    //id1 = std::stoi( col1.erase(0,1) ); // extract the integer index after the element character
+
+
+    std::string str_num1 = get_col_number(col1);
+    if (str_num1.size() == 0)
+        return false;
+    else
+        id1 = std::stoi(str_num1);
+
+
+    std::string str_num2 = get_col_number(col1);
+    if (str_num2.size() == 0)
+        return false;
+    else
+        id2 = std::stoi(str_num1);
+
+
     return true;
 }
 
@@ -516,9 +552,40 @@ bool Read_Hbond (std::fstream & file, Hbond& bond)
     stream >> col2 >> col3;
     bond.acceptor_elem = col3[0];
     if ( bond.acceptor_elem != 'O' ) return true; // only N-H-O bonds are needed
-    bond.donor_ind = std::stoi( col1.erase(0,1) );
-    bond.atom_H_ind = std::stoi( col2.erase(0,1) );
-    bond.acceptor_ind = std::stoi( col3.erase(0,1) );
+
+    //bond.donor_ind = std::stoi( col1.erase(0,1) );
+    //bond.atom_H_ind = std::stoi( col2.erase(0,1) );
+    //bond.acceptor_ind = std::stoi( col3.erase(0,1) );
+
+
+    // 1
+    std::string str_num1 = get_col_number(col1);
+    if (str_num1.size() == 0)
+        return false;
+    else
+        bond.donor_ind = std::stoi(str_num1);
+
+    // 2
+    std::string str_num2 = get_col_number(col1);
+    if (str_num2.size() == 0)
+        return false;
+    else
+        bond.atom_H_ind = std::stoi(str_num2);
+
+    // 3
+    std::string str_num3 = get_col_number(col3);
+    if (str_num3.size() == 0)
+        return false;
+    else
+        bond.acceptor_ind = std::stoi(str_num3);
+
+
+    /*
+    bond.donor_ind = std::stoi(get_col_number(col1));
+    bond.atom_H_ind = std::stoi(get_col_number(col2));
+    bond.acceptor_ind = std::stoi(get_col_number(col3));
+    */
+
     stream >> col1 >> col2 >> col3; // distances D - H  H...A   D...A
     bond.distance_HA = std::stod( col2 );
     stream >> col1; // angle D - H...A
@@ -528,7 +595,7 @@ bool Read_Hbond (std::fstream & file, Hbond& bond)
     bond.shift.y = col1.at( 3 ) - '4' - 1;
     bond.shift.z = col1.at( 4 ) - '4' - 1;
     return true;
-    
+
 }
 
 bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std::vector<Molecule>& molecules, std::vector<Hbond>& Hbonds)
@@ -548,7 +615,7 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
     // initialise molecule parameters
     std::map<char,int> indices;
     for ( auto i : max_indices ) indices.insert( std::make_pair( i.first, 0 ) );
-    
+
     // Read box parameters
     Read_Until_Section( file, 6 );
     Read_String_Value( file, "_cell_length_a", box.a );
@@ -560,16 +627,17 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
     box.Find_Matrix();
     Read_Until_String( file, "_atom_site_refinement_flags" );
     // Read x,y,z coordinates of all atoms
+
     while ( Read_idxyz( file, id, x, y, z ) )
     {
         element = id[0];
-        ind_molecule = int( indices[ element ] / max_indices[ element ] );
+        ind_molecule = int( indices[ element ] / max_indices[ element ] ); // index of the current element
         if ( ind_molecule > molecules.size() )
         { std::cout<<"\nError in Read_cif: i_mol="<<ind_molecule<<" mol_size="<<molecules.size(); return false; }
         if ( ind_molecule == molecules.size() ) { molecules.push_back( Molecule( (int)molecules.size() ) ); }
         ind_atom = ++indices[ element ];
         Atom atom( element, ind_atom, x, y ,z );
-        
+
         atom.point_abs = box.Abs_Position( atom.point_box );
         molecules[ ind_molecule ].atoms[ element ].push_back( atom );
         if ( element == 'C' )
@@ -579,7 +647,8 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
             if ( ind == 1 or ind == 14 ) molecules[ ind_molecule ].c += atom.point_box;
         }
     }
-    
+
+        /*
     // Read NH links between atoms
     Read_Until_String( file, "_geom_bond_publ_flag" );
     char element1, element2;
@@ -594,9 +663,12 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
             molecules[ index_molecule ].indices_NH.push_back( std::make_pair( id1, id2 ) );
         }
     }
-    
+        */
+
     // Read hydrogen bonds between molecules
-    Read_Until_String( file, "_geom_hbond_publ_flag" ); Read_Until_String( file, "#D" ); Read_Until_String( file, "#" );
+    Read_Until_String( file, "_geom_hbond_publ_flag" );
+    Read_Until_String( file, "#D" );
+    Read_Until_String( file, "#" );
     Hbond bond;
     while( Read_Hbond( file, bond ) )
     {
@@ -604,7 +676,7 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
         Hbonds.push_back( bond );
         //bond.Print();
     }
-    
+
     box.n_molecules = (int)molecules.size();
     box.Print();
     return true;
@@ -633,7 +705,7 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
 
 bool Linked_NHO (Molecule& m0, Molecule& m1,double & d)  // I could not understand the operations within this function.
 {
-    
+
     bool linked = false;
     for ( int i = 0; i < m0.atoms['N'].size(); i++ )
     {
@@ -688,10 +760,10 @@ bool Structures_Equal (Graph& s0, Vertex_it v0, Graph& s1, Vertex_it v1) // How 
     Order_Neighbours( s0, v0, neighbours0 );
     Order_Neighbours( s1, v1, neighbours1 );
     if ( ! Neighbours_Equal( neighbours0, neighbours1 ) ) return false;
-    
+
     for ( int i = 0; i < neighbours0.size(); i++ )
     {
-        
+
     }
     return true;
 }
@@ -759,7 +831,7 @@ bool Add_Vertex (Graph& graph, Vertex_map& vertices, Point3i cell, int index, Gr
 
 int main()
 {
-    std::string data_folder = "/Users/kurlin/C++/Datasets/MIF/HOF/molGeom/"; // Vitaliy's folder
+    std::string data_folder = "./fullCif/"; // Vitaliy's folder
     Box box;
     std::map< Point3i, std::vector<Molecule>, Compare_Points3i > molecules; // 1st = box position, 2nd = molecules in the box
     std::vector<Hbond> Hbonds;
@@ -772,14 +844,15 @@ int main()
     max_indices.insert( std::make_pair( 'N', 6 ) );
     max_indices.insert( std::make_pair( 'C', 23 ) );
     max_indices.insert( std::make_pair( 'H', 14 ) );
-    
+
     for ( int ind_structure = 0; ind_structure < num_structures; ind_structure++ )
     {
         Hbonds.clear();
         molecules.clear();
         std::cout<<"\nStructure "<<ind_structure + 1;
         // st1: stage 1 is to extract data from cif, then find centres and angles in the orthogonal system
-        Read_cif( data_folder + "T2_" + std::to_string( ind_structure + 1 ) + "_num_molGeom.cif", max_indices, box, molecules[ O3 ], Hbonds );
+        Read_cif( data_folder + "T2_" + std::to_string( ind_structure + 1 ) + "_molGeom.cif", max_indices, box, molecules[ O3 ], Hbonds );
+                std::cout << "here" << std::endl;
         for ( auto& m : molecules[ O3 ] )
         {
             //auto m = &molecules[ O3 ][ i ];
@@ -789,7 +862,7 @@ int main()
             m.Find_Angles();
         }
         int num_molecules = (int)molecules[ O3 ].size();
-    
+
         Graph graph;
         Vertex_map map_vertices;
         // st2: stage 2 is to build isolated vertices of molecules from 27 boxes in 3x3 neighbourhood
@@ -802,7 +875,7 @@ int main()
                 map_vertices[ s ].insert( std::make_pair( m.index, vertex ) );
                 graph[ vertex ] = m;
             }
-        
+
         int ind_mol0, ind_mol1;
         Graph::vertex_descriptor v0, v1;
         std::pair<Graph::edge_descriptor, bool> edge;
@@ -823,7 +896,7 @@ int main()
                 if ( cell + bond.shift == O3 ) { v1 = map_vertices[ cell + bond.shift ][ ind_mol1 ]; }
                 else Add_Vertex( graph, map_vertices, cell + bond.shift, ind_mol1, v1 );
                 std::cout<<" "<<cell<<"->"<<cell + bond.shift;
-                
+
                 edge = boost::edge( v0, v1, graph );
                 if ( ! edge.second ) // the edge didn't exist
                 {
@@ -840,11 +913,11 @@ int main()
                     graph[ edge.first ].bonds.push_back( bond );
                 }
             }
-            
+
         }
         //boost::write_graphviz( std::cout, graph );
         Print( graph );
-    
+
         Decoration neighborhoods;
         // st4: stage 4 is to build neighborhoods and stars of our/in edges around each vertex
         for ( auto vertex_pair = vertices( graph ); vertex_pair.first != vertex_pair.second; ++vertex_pair.first)
@@ -866,14 +939,14 @@ int main()
         std::cout<<"\nNeighborhoods";
         for ( auto n : neighborhoods )
             graph[ n.second ].Print( );
-            
+
         // st5: compute invariants of the graph
-        
+
         structures[ ind_structure ] = graph;
     }
-    
-    
+
+
     std::cout<<"\n";
-    
+
     return 0;
 }
