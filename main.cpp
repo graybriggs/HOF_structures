@@ -53,20 +53,21 @@ using namespace cv;
 // Constants
 const Point3i O3(0, 0, 0);
 const Point3d origin(0, 0, 0);
-//const double M_PI=3.1472;
-//const bool debug = false;
 const double distance_error = 1e-2;
-//const double length_NH = 1.00577;
-//const double length_HO = 2.62; //1.97436;
 const double length_ON = 3.07;
 const double max_angle_NHO = 100; // degrees
-//const double distance_ON = 2.82822; // min distance between N/O atoms in adjacent molecules
-//const double big_constant = 1e+8;
 const double tolerance_length = 1e-4;
 //const double tolerance_dist_HA = 1e-4;
 
-Point3d V (Eigen::VectorXd v) { return Point3d( v(0), v(1), v(2) ); }
-Eigen::VectorXd V (Point3d v) { Eigen::VectorXd vector(3); vector << v.x, v.y, v.z; return vector; }
+Point3d V(Eigen::VectorXd v) {
+    return Point3d(v(0), v(1), v(2));
+}
+
+Eigen::VectorXd V (Point3d v) {
+    Eigen::VectorXd vector(3);
+    vector << v.x, v.y, v.z;
+    return vector;
+}
 
 class Index_Value
 {
@@ -76,18 +77,32 @@ public:
     Index_Value () {}
     Index_Value (int i, double v) { index=i; value=v; }
 };
-bool Decreasing_Values (Index_Value const& p1, Index_Value const& p2) { return p1.value > p2.value; }
-bool Increasing_Values (Index_Value const& p1, Index_Value const& p2) { return p1.value < p2.value; }
 
-double Angle_Positive (Point3d v1, Point3d v2) { return acos( v1.dot( v2 ) / ( norm( v1 ) * norm( v2 ) ) ) * 180 / M_PI; }
-double Det (Point2d v1, Point2d v2) { return v1.x * v2.y - v1.y * v2.x; }
+bool Decreasing_Values (Index_Value const& p1, Index_Value const& p2) {
+    return p1.value > p2.value;
+}
+
+bool Increasing_Values (Index_Value const& p1, Index_Value const& p2) {
+    return p1.value < p2.value;
+}
+
+double Angle_Positive (Point3d v1, Point3d v2) {
+    return acos( v1.dot( v2 ) / ( norm( v1 ) * norm( v2 ) ) ) * 180 / M_PI;
+}
+
+double Det (Point2d v1, Point2d v2) {
+    return v1.x * v2.y - v1.y * v2.x;
+}
+
 double Angle_Signed (Point2d v1, Point2d v2)
 {
-    double dot_product = v1.dot( v2 ) / ( norm( v1 ) * norm( v2 ) );
-    double det = Det( v1, v2 );
-    double angle = acos( dot_product ) * 180 / M_PI;
-    if ( det >= 0 ) return angle; // range[0,pi)
-    else return -angle; // range [-pi,0)
+    double dot_product = v1.dot(v2) / (norm(v1) * norm(v2));
+    double det = Det(v1, v2);
+    double angle = acos(dot_product) * 180 / M_PI;
+    if (det >= 0)
+        return angle; // range[0,pi)
+    else
+        return -angle; // range [-pi,0)
 }
 
 Matrix Cross_Product (Point3d v)
@@ -110,25 +125,29 @@ Matrix Tensor_Product (Point3d v)
     return m;
 }
 
-class Box
-{
+
+// Box is a representation of the non-rectangular box that delineates the molecule
+class Box {
 public:
     double a = 0, b = 0, c = 0; // sides
     double alpha = 0, beta = 0, gamma = 0; //angles
     double delta = 0, nu = 0; // delta is the nu is the vertical angle
     Matrix matrix = Eigen::ArrayXXd::Zero( 3, 3 );
-    int n_molecules = 0;
-    Box () { matrix << 0, 0, 0, 0, 0, 0, 0, 0, 0; }
-    void Print()
-    {
-        std::cout<<"\nBox: a="<<a<<" b="<<b<<" c="<<c<<" al="<<alpha<<" be="<<beta<<" ga="<<gamma<<" de="<<delta<<" nu="<<nu<<" m="<<n_molecules;
+    std::size_t n_molecules = 0;
+    Box () {
+        matrix << 0, 0, 0, 0, 0, 0, 0, 0, 0;
     }
-    void Find_Matrix ()
-    {
+    void Print() {
+        std::cout << "\nBox: a=" << a << " b=" << b << " c=" << c
+                  << " alpha=" << alpha << " beta=" << beta
+                  << " gamma=" << gamma << " de=" << delta << " nu="
+                  << nu << " m=" << n_molecules;
+    }
+    void Find_Matrix () {
         double al = alpha * M_PI / 180;
         double be = beta * M_PI / 180;
         double ga = gamma * M_PI / 180;
-        double cos_delta = ( cos(al) - cos(be) * cos(ga) ) / ( sin(be) * sin(ga) );
+        double cos_delta = (cos(al) - cos(be) * cos(ga)) / (sin(be) * sin(ga));
         delta = acos( cos_delta );
         matrix(0,0) = a;
         matrix(0,1) = b * cos(ga);
@@ -142,20 +161,22 @@ public:
     Point3d Abs_Position (Point3d point) { return V( matrix * V( point ) ); }
 };
 
-class Atom
-{
+class Atom {
 public:
     char element; // C for carbon, O for oxygen
     int index; // C1, O2
     cv::Point3d point_abs; // coordinates in the orthogonal system
     cv::Point3d point_box; // fractional coordinates in the box
     Atom() {}
-    Atom (char e, int i, double x, double y, double z) { element = e; index = i; point_box = Point3d( x, y, z ); }
-    void Print() { std::cout<<"\n"<<element<<index<<" p_a="<<point_abs<<" p_b="<<point_box; }
+    Atom (char e, int i, double x, double y, double z) {
+        element = e; index = i; point_box = Point3d( x, y, z );
+    }
+    void Print() {
+        std::cout << "\n" << element << index << " point_abs=" << point_abs << " point_box=" << point_box;
+    }
 };
 
-class Hbond
-{
+class Hbond {
 public:
     char donor_elem = 'N', acceptor_elem;
     int donor_ind, atom_H_ind, acceptor_ind;
@@ -165,13 +186,12 @@ public:
     //pb
     void Print ()
     {
-        std::cout<<"\n"<<donor_elem<<donor_ind<<"-H"<<atom_H_ind<<"-"<<acceptor_elem<<acceptor_ind;
-        std::cout<<" shift="<<shift<<" d_HA="<<distance_HA;
+        std::cout << "\n" << donor_elem << donor_ind << "-H" << atom_H_ind << "-" << acceptor_elem << acceptor_ind;
+        std::cout << " shift=" << shift << " dist_HA=" << distance_HA;
     }
 };
 
-class Edge
-{
+class Edge {
 public:
     Point3d arrow;
     bool in = false;
@@ -180,31 +200,45 @@ public:
     Edge (Point3d a) { arrow = a; }
 };
 
-std::pair<bool,bool> First_edge_smaller (Edge const& e0, Edge const& e1)
-{
-    if ( e0.bonds.size() < e1.bonds.size() ) return std::make_pair( true, true );
-    if ( e0.bonds.size() > e1.bonds.size() ) return std::make_pair( true, false );
-    if ( norm( e0.arrow ) + tolerance_length < norm( e1.arrow ) ) return std::make_pair( true, true );
-    if ( norm( e0.arrow ) - tolerance_length > norm( e1.arrow ) ) return std::make_pair( true, false );
-    for ( int i = 0; i < e0.bonds.size() and i < e1.bonds.size(); i++ )
-    {
-        if ( e0.bonds[i].distance_HA + tolerance_length < e1.bonds[i].distance_HA )  return std::make_pair( true, true );
-        if ( e0.bonds[i].distance_HA - tolerance_length > e1.bonds[i].distance_HA )  return std::make_pair( true, false );
+std::pair<bool,bool> First_edge_smaller (Edge const& e0, Edge const& e1) {
+    if (e0.bonds.size() < e1.bonds.size() ) {
+        DBG_PRINT("First edge smaller than second")
+        return std::make_pair( true, true );
     }
+    if (e0.bonds.size() > e1.bonds.size()) {
+        DBG_PRINT("First edge larger than second")
+        return std::make_pair( true, false );
+    }
+    if (norm(e0.arrow) + tolerance_length < norm( e1.arrow )) {
+        DBG_PRINT("e0 arrow + tol < e1 arrow")
+        return std::make_pair( true, true );
+    }
+    if (norm(e0.arrow) - tolerance_length > norm( e1.arrow )) {
+        return std::make_pair( true, false );
+    }
+    for ( int i = 0; i < e0.bonds.size() and i < e1.bonds.size(); i++ ) {
+        if ( e0.bonds[i].distance_HA + tolerance_length < e1.bonds[i].distance_HA ) {
+            DBG_PRINT("e0 HA + tolerance < e1 HA")
+            return std::make_pair( true, true );
+        }
+        if (e0.bonds[i].distance_HA - tolerance_length > e1.bonds[i].distance_HA) {
+            DBG_PRINT("e0 HA + tolerance < e1 HA")
+            return std::make_pair(true, false);
+        }
+    }
+    // TODO AVERAGE EDGE LENGTH COMPARISON
+
     //std::cout<<" E";
-    return std::make_pair( false, false );
+    return std::make_pair(false, false);
 }
 
-struct Compare_Edges
-{
-    bool operator() (Edge const& e0, Edge const& e1) const
-    {
+struct Compare_Edges {
+    bool operator() (Edge const& e0, Edge const& e1) const {
         return First_edge_smaller( e0, e1 ).second;
     }
 };
 
-class Molecule
-{
+class Molecule {
 public:
     int index = 0; //
     Point3i cell = O3; // the cell in the 3G grid defined by the given box
@@ -216,7 +250,10 @@ public:
     std::vector<Point3d> oxygen_rays;
 
     Molecule () {}
-    Molecule (int ind) { index = ind; internal = true; }
+    Molecule (int ind) {
+        index = ind; internal = true;
+    }
+
     Molecule (Molecule& molecule_old, Point3i cell_shift, Point3d abs_shift, int ind)
     {
         index = ind;
@@ -231,19 +268,17 @@ public:
         atoms = molecule_old.atoms;
         indices_NH = molecule_old.indices_NH;
         for ( auto it = atoms.begin(); it != atoms.end(); it++ )
-            for ( int i = 0; i < it->second.size(); i++ )
+            for ( int i = 0; i < it->second.size(); i++)
                 it->second[i].point_abs += abs_shift;
     }
 
-    void Print ()
-    {
+    void Print () {
         std::cout<<"\nv"<<index<<cell<<" centre="<<centre<<internal;
         //std::cout<<" C_ver="<<carbon_angle_ver<<" C_hor="<<carbon_angle_hor<<" O_angle="<<oxygen_angle;
         //for ( int i = 0; i < indices_NH.size(); i++ ) std::cout<<"N"<<indices_NH[i].first<<" <->"<<" H"<<indices_NH[i].second<<std::endl;
     }
 
-    void Shift (Point3d shift, Molecule& molecule_new)
-    {
+    void Shift (Point3d shift, Molecule& molecule_new) {
         // Copy angles
         molecule_new.carbon_angle_ver = carbon_angle_ver;
         molecule_new.carbon_angle_hor = carbon_angle_hor;
@@ -256,26 +291,25 @@ public:
                 it->second[i].point_abs += shift;
     }
 
-    void Find_Angles ()
-    {
+    void Find_Angles () {
         carbon_axis = atoms['C'][0].point_abs - atoms['C'][13].point_abs;
         if ( carbon_axis.z < 0 or ( carbon_axis.z == 0 and carbon_axis.y < 0 )
             or ( carbon_axis.z == 0 and carbon_axis.y == 0 and carbon_axis.x < 0 )) carbon_axis *= -1; // goes upwards
         //std::cout<<"\ncarbon_axis="<<carbon_axis;
         carbon_angle_ver = Angle_Positive( cv::Point3d(0,0,1), carbon_axis );
-        if ( carbon_angle_ver > 0 ) // only if carbon_axis can be projected to xy-plane
-        {
+        if ( carbon_angle_ver > 0 ) {// only if carbon_axis can be projected to xy-plane
             Point2d carbon_axis_xy( carbon_axis.x, carbon_axis.y );
             carbon_angle_hor = Angle_Signed( Point2d(1,0), carbon_axis_xy );
         }
         // Find oxygen_rays;
-        for ( int i = 0; i < atoms['O'].size(); i++ ) oxygen_rays.push_back( atoms['O'][i].point_abs - centre );
+        for ( int i = 0; i < atoms['O'].size(); i++ )
+            oxygen_rays.push_back( atoms['O'][i].point_abs - centre );
+
         Matrix rotation = Eigen::MatrixXd::Identity(3,3);
         double c = cos( carbon_angle_ver * M_PI / 180 );
         rotation *= c;
         // Find the rotation matrix to make the carbon axis vertical
-        if ( carbon_angle_ver > 0 )
-        {
+        if (carbon_angle_ver > 0) {
             cv::Point3d a( 0, 0, 0 ); // rotation_axis
             a.x = carbon_axis.y;
             a.y = -carbon_axis.x; // a = rotation_axis is orthogonal to carbon_axis
@@ -283,24 +317,25 @@ public:
             double s = sin( carbon_angle_ver * M_PI / 180 );
             rotation += s * Cross_Product( a ) + (1-c) * Tensor_Product( a ); //std::cout<<"\nr="<<rotation;
         }
+
         std::vector<Eigen::VectorXd> oxygen_vectors( 3 );
         for ( int i = 0; i < 3; i++ ) oxygen_vectors[ i ] = rotation * V( oxygen_rays[ i ] );
         // Find 3 angles with oxygen rays
         int min_index = -1;
         double min_abs_angle = 180;
-        std::vector<double> oxygen_angles( 3 );
-        for ( int i = 0; i < 3; i++ )
-        {
+        std::vector<double> oxygen_angles(3);
+
+        for ( int i = 0; i < 3; i++ ) {
             if ( fabs( oxygen_vectors[ i ][2] ) > distance_error )
                 std::cout<<"\nError in Find_Angles: oxygen_vectors[ i ][2]="<<oxygen_vectors[ i ][2];
             oxygen_angles[ i ] = Angle_Signed( Point2d(1,0), Point2d( oxygen_vectors[ i ][0], oxygen_vectors[ i ][1] ) );
             //std::cout<<"\nray"<<i<<"="<<Point2d( oxygen_rays[ i ][0], oxygen_rays[ i ][1] )<<" angle="<<oxygen_angles[ i ];
             if ( min_abs_angle > fabs( oxygen_angles[ i ] ) ) { min_abs_angle = fabs( oxygen_angles[ i ] ); min_index = i; }
         }
-        if ( min_index < 0 )
-        {
+        if ( min_index < 0) {
             std::cout<<"\nError in Find_Angles: min_index="<<min_index<<" C_axis="<<carbon_axis; //<<" rot_axis="<<a<<" mat="<<rotation;
-            for ( int i = 0; i < 3; i++ ) std::cout<<" ray="<<atoms['O'][i].point_abs - centre<<"->"<<oxygen_rays[ i ];
+            for (int i = 0; i < 3; i++)
+                std::cout << " ray=" << atoms['O'][i].point_abs - centre << "->" << oxygen_rays[ i ];
         }
         else oxygen_angle = oxygen_angles[ min_index ];
     }
@@ -322,8 +357,7 @@ public:
      }*/
 };
 
-Point3d Cross_Product (Point3d v0, Point3d v1)
-{
+Point3d Cross_Product(Point3d v0, Point3d v1) {
     Point3d v;
     v.x = v0.y * v1.z - v1.y * v0.z;
     v.y = v0.z * v1.y - v1.z * v0.y;
@@ -331,8 +365,7 @@ Point3d Cross_Product (Point3d v0, Point3d v1)
     return v;
 }
 
-bool Find_Rotation (Point3d v0, Point3d v1, Matrix& rotation)  //What is the purpose of calculation of rotation matrix w.r.t verties
-{
+bool Find_Rotation(Point3d v0, Point3d v1, Matrix& rotation) {  //What is the purpose of calculation of rotation matrix w.r.t verticies
     double angle = Angle_Positive( v0, v1 );
     rotation = Eigen::MatrixXd::Identity(3,3);
     if ( angle == 0 ) return true; // identity rotation
@@ -342,14 +375,12 @@ bool Find_Rotation (Point3d v0, Point3d v1, Matrix& rotation)  //What is the pur
     if ( angle == M_PI ) return true;
     Point3d axis = Cross_Product( v0, v1 );
     axis *= 1.0 / norm( axis );
-    rotation += s * Cross_Product( axis ) + (1-c) * Tensor_Product( axis ); //std::cout<<"\nr="<<rotation;
+    rotation += s * Cross_Product(axis) + (1-c) * Tensor_Product(axis); //std::cout<<"\nr="<<rotation;
     return true;
 }
 
-struct Compare_Points3i
-{
-    bool operator() (cv::Point3i const& a, cv::Point3i const& b) const
-    {
+struct Compare_Points3i {
+    bool operator() (cv::Point3i const& a, cv::Point3i const& b) const {
         if ( a.x < b.x ) return true;
         if ( a.x == b.x and a.y < b.y ) return true;
         if ( a.x == b.x and a.y == b.y ) return ( a.z < b.z );
@@ -368,27 +399,23 @@ typedef std::multimap< Edge, Graph::edge_descriptor, Compare_Edges > Star;
 std::pair<bool,bool> First_star_smaller (Star const& s0, Star const& s1)
 {
     std::pair<bool,bool> result;
-    for ( auto it0 = s0.begin(), it1 = s1.begin(); it0 != s0.end() and it1 != s1.end(); it0++, it1++ )
-    {
+    for ( auto it0 = s0.begin(), it1 = s1.begin(); it0 != s0.end() and it1 != s1.end(); it0++, it1++ ) {
         result = First_edge_smaller( it0->first, it1->first );
-        if ( result.first ) return result;
+        if (result.first) return result;
     }
     return std::make_pair( false, false );
 }
 
-class Neighborhood
-{
+class Neighborhood {
 public:
     Star out, in;
     Neighborhood () {}
-    Neighborhood (Star out_, Star in_)
-    {
+    Neighborhood (Star out_, Star in_) {
         out = out_; in = in_;
     }
 };
 
-std::pair<bool,bool> First_neighborhood_smaller (Neighborhood const& n0, Neighborhood const& n1)
-{
+std::pair<bool,bool> First_neighborhood_smaller (Neighborhood const& n0, Neighborhood const& n1) {
     if ( n0.out.size() + n0.in.size() < n1.out.size() + n1.in.size() ) return std::make_pair( true, true ); // n0 has fewer out+in edges than n1
     if ( n0.out.size() + n0.in.size() > n1.out.size() + n1.in.size() ) return std::make_pair( true, false );
     if ( n0.out.size() < n1.out.size() ) return std::make_pair( true, true ); // n0 has fewer out edges than n1
@@ -402,35 +429,36 @@ std::pair<bool,bool> First_neighborhood_smaller (Neighborhood const& n0, Neighbo
     return std::make_pair( false, false );
 }
 
-struct Compare_Neighborhoods
-{
-    bool operator() (Neighborhood const& n0, Neighborhood const& n1) const { return First_neighborhood_smaller( n0, n1 ).second; }
+struct Compare_Neighborhoods {
+    bool operator() (Neighborhood const& n0, Neighborhood const& n1) const {
+        return First_neighborhood_smaller( n0, n1 ).second;
+    }
 };
 typedef std::multimap< Neighborhood, Graph::vertex_descriptor, Compare_Neighborhoods > Decoration;
 
-class Vertex_Point
-{
+class Vertex_Point {
 public:
     Adjacency_it iter;
     Point3d point;
     Vertex_Point () {}
-    Vertex_Point (Adjacency_it it, Point3d p) { iter = it; point = p; }
+    Vertex_Point (Adjacency_it it, Point3d p) {
+        iter = it; point = p;
+    }
 };
-bool Increasing_Points (Vertex_Point const& v1, Vertex_Point const& v2)
+
+bool Increasing_Points(Vertex_Point const& v1, Vertex_Point const& v2)
 {
-    if ( v1.point.x < v2.point.x ) return true;
-    if ( v1.point.x > v2.point.x ) return false;
-    if ( v1.point.y < v2.point.y ) return true;
-    if ( v1.point.y > v2.point.y ) return false;
-    if ( v1.point.z < v2.point.z ) return true;
+    if (v1.point.x < v2.point.x) return true;
+    if (v1.point.x > v2.point.x) return false;
+    if (v1.point.y < v2.point.y) return true;
+    if (v1.point.y > v2.point.y) return false;
+    if (v1.point.z < v2.point.z) return true;
     return false;
 }
 
-bool Read_Until_Section (std::fstream& file, int section)
-{
+bool Read_Until_Section (std::fstream& file, int section) {
     std::string line, col1 = "", col2 = "";
-    while ( col1 != "#" or col2 != std::to_string( section ) + "." )
-    {
+    while ( col1 != "#" or col2 != std::to_string( section ) + "." ) {
         if ( ! std::getline( file, line ) ) return false;
         std::istringstream stream( line );
         stream >> col1 >> col2;
@@ -439,11 +467,9 @@ bool Read_Until_Section (std::fstream& file, int section)
     return true;
 }
 
-bool Read_Until_String (std::fstream& file, std::string expected_word)
-{
+bool Read_Until_String (std::fstream& file, std::string expected_word) {
     std::string line, current_word = "";
-    while ( current_word != expected_word )
-    {
+    while ( current_word != expected_word ) {
         if ( ! std::getline( file, line ) ) return false;
         std::istringstream stream( line );
         stream >> current_word; // the first word in the line
@@ -451,29 +477,25 @@ bool Read_Until_String (std::fstream& file, std::string expected_word)
     return true;
 }
 
-bool Read_String_Value (std::fstream& file, std::string s, double& v)
-{
+bool Read_String_Value (std::fstream& file, std::string s, double& v) {
     std::string line, col1 = "", col2;
-    while ( col1 != s )
-    {
-        if ( ! std::getline( file, line ) ) return false;
-        std::istringstream stream( line );
+    while (col1 != s) {
+        if (!std::getline(file, line)) return false;
+        std::istringstream stream(line);
         stream >> col1 >> col2;
     }
-    v = atof( col2.c_str() );
+    v = atof(col2.c_str());
     return true;
 }
 
-bool Read_String_Value (std::fstream& file, std::string s, int& v)
-{
+bool Read_String_Value (std::fstream& file, std::string s, int& v) {
     double value;
     Read_String_Value( file, s, value );
-    v = int( value );
+    v = int(value);
     return true;
 }
 
-bool Read_2columns (std::fstream& file, std::string& col1, std::string& col2)
-{
+bool Read_2columns (std::fstream& file, std::string& col1, std::string& col2) {
     std::string line;
     col1 = ""; col2 = "";
     std::getline( file, line );
@@ -482,19 +504,23 @@ bool Read_2columns (std::fstream& file, std::string& col1, std::string& col2)
     return true;
 }
 
-bool Read_idxyz (std::fstream& file, std::string& id, double& x, double& y, double& z)
-{
+bool Read_idxyz (std::fstream& file, std::string& id, double& x, double& y, double& z) {
     std::string line, col2, col3, col4, col5, col6;
     id = "";
-    if ( !getline( file, line ) ) return false;
-    std::istringstream stream( line );
+    if (!getline(file, line))
+        return false;
+
+    std::istringstream stream(line);
     stream >> id >> col2 >> col3 >> col4;
-    if ( id == "" ) return false;
-    x = atof( col4.c_str() );
+
+    if (id == "")
+        return false;
+
+    x = atof( col4.c_str());
     stream >> col5;
-    y = atof( col5.c_str() );
+    y = atof( col5.c_str());
     stream >> col6;
-    z = atof( col6.c_str() );
+    z = atof( col6.c_str());
     return true;
 }
 
@@ -511,7 +537,7 @@ std::string get_col_number(std::string& str) {
 }
 
 //Read links between atoms within one molecule
-bool Read_Link (std::fstream & file, char & element1, char & element2, int & id1, int & id2)
+bool Read_Link(std::fstream& file, char& element1, char& element2, int& id1, int& id2)
 {
     std::string line, col1, col2;
     if ( !getline( file, line ) ) return false;
@@ -542,7 +568,7 @@ bool Read_Link (std::fstream & file, char & element1, char & element2, int & id1
     return true;
 }
 
-bool Read_Hbond (std::fstream & file, Hbond& bond)
+bool Read_Hbond(std::fstream& file, Hbond& bond)
 {
     std::string line, col1, col2, col3;
     if ( !getline( file, line ) ) return false;
@@ -551,7 +577,8 @@ bool Read_Hbond (std::fstream & file, Hbond& bond)
     if ( col1 == "" ) return false; // finished reading this section
     stream >> col2 >> col3;
     bond.acceptor_elem = col3[0];
-    if ( bond.acceptor_elem != 'O' ) return true; // only N-H-O bonds are needed
+    if ( bond.acceptor_elem != 'O' )
+        return true; // only N-H-O bonds are needed
 
     //bond.donor_ind = std::stoi( col1.erase(0,1) );
     //bond.atom_H_ind = std::stoi( col2.erase(0,1) );
@@ -587,24 +614,26 @@ bool Read_Hbond (std::fstream & file, Hbond& bond)
     */
 
     stream >> col1 >> col2 >> col3; // distances D - H  H...A   D...A
-    bond.distance_HA = std::stod( col2 );
+    bond.distance_HA = std::stod(col2);
     stream >> col1; // angle D - H...A
     stream >> col1; // shift code
-    if ( col1 == "." ) { bond.shift = O3; return true; } // both N, O are in the same box
+    if ( col1 == "." ) {
+        bond.shift = O3;
+        return true;
+    } // both N, O are in the same box
     bond.shift.x = col1.at( 2 ) - '4' - 1; // code 5 means shift 0
     bond.shift.y = col1.at( 3 ) - '4' - 1;
     bond.shift.z = col1.at( 4 ) - '4' - 1;
     return true;
-
 }
 
 bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std::vector<Molecule>& molecules, std::vector<Hbond>& Hbonds)
 {
     std::fstream file;
     file.open( name.c_str(), std::ios::in );
-    if ( ! file.is_open() )
+    if (!file.is_open())
     {
-        std::cout<<"\nFile "<<name<<" not found";
+        std::cout << "\nFile " << name << " not found";
         return false;
     }
     std::string line, id, col1, col2, col3, col4;
@@ -614,7 +643,8 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
     double x,y,z;
     // initialise molecule parameters
     std::map<char,int> indices;
-    for ( auto i : max_indices ) indices.insert( std::make_pair( i.first, 0 ) );
+    for ( auto i : max_indices )
+        indices.insert(std::make_pair(i.first, 0));
 
     // Read box parameters
     Read_Until_Section( file, 6 );
@@ -631,20 +661,24 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
     while ( Read_idxyz( file, id, x, y, z ) )
     {
         element = id[0];
-        ind_molecule = int( indices[ element ] / max_indices[ element ] ); // index of the current element
-        if ( ind_molecule > molecules.size() )
-        { std::cout<<"\nError in Read_cif: i_mol="<<ind_molecule<<" mol_size="<<molecules.size(); return false; }
-        if ( ind_molecule == molecules.size() ) { molecules.push_back( Molecule( (int)molecules.size() ) ); }
-        ind_atom = ++indices[ element ];
-        Atom atom( element, ind_atom, x, y ,z );
+        ind_molecule = static_cast<int>(indices[element] / max_indices[element]); // index of the current element
+        if (ind_molecule > molecules.size()) {
+            std::cout<<"\nError in Read_cif: i_mol=" << ind_molecule << " mol_size=" << molecules.size();
+            return false;
+        }
+        if (ind_molecule == molecules.size()) {
+            molecules.push_back(Molecule((int)molecules.size()));
+        }
+        ind_atom = ++indices[element];
+        Atom atom(element, ind_atom, x, y, z);
 
         atom.point_abs = box.Abs_Position( atom.point_box );
-        molecules[ ind_molecule ].atoms[ element ].push_back( atom );
-        if ( element == 'C' )
-        {
-            molecules[ ind_molecule ].centre += atom.point_box;
-            int ind = ind_atom - ind_molecule * max_indices[ element ];
-            if ( ind == 1 or ind == 14 ) molecules[ ind_molecule ].c += atom.point_box;
+        molecules[ind_molecule].atoms[element].push_back(atom);
+        if (element == 'C') {
+            molecules[ind_molecule].centre += atom.point_box;
+            int ind = ind_atom - ind_molecule * max_indices[element];
+            if (ind == 1 or ind == 14)
+                molecules[ind_molecule].c += atom.point_box;
         }
     }
 
@@ -666,18 +700,19 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
         */
 
     // Read hydrogen bonds between molecules
-    Read_Until_String( file, "_geom_hbond_publ_flag" );
-    Read_Until_String( file, "#D" );
-    Read_Until_String( file, "#" );
+    Read_Until_String(file, "_geom_hbond_publ_flag");
+    Read_Until_String(file, "#D");
+    Read_Until_String(file, "#");
     Hbond bond;
     while( Read_Hbond( file, bond ) )
     {
-        if ( bond.acceptor_elem != 'O' ) continue;
-        Hbonds.push_back( bond );
+        if ( bond.acceptor_elem != 'O' )
+            continue;
+        Hbonds.push_back(bond);
         //bond.Print();
     }
 
-    box.n_molecules = (int)molecules.size();
+    box.n_molecules = molecules.size();
     box.Print();
     return true;
 }
@@ -726,8 +761,7 @@ bool Linked_NHO (Molecule& m0, Molecule& m1,double & d)  // I could not understa
     return linked;
 }
 
-void Order_Neighbours (Graph& s, Vertex_it v, std::vector<Vertex_Point>& c)
-{
+void Order_Neighbours (Graph& s, Vertex_it v, std::vector<Vertex_Point>& c) {
     c.clear();
     for( auto neighbours = boost::adjacent_vertices( *v, s ); neighbours.first != neighbours.second; ++neighbours.first )
         c.push_back( Vertex_Point( neighbours.first, s[ *neighbours.first ].centre ) );
@@ -735,8 +769,7 @@ void Order_Neighbours (Graph& s, Vertex_it v, std::vector<Vertex_Point>& c)
     std::cout<<"\nSorted:"; for ( auto n : c ) std::cout<<" "<<n.point;
 }
 
-bool Neighbours_Equal (std::vector<Vertex_Point>const& neighbours0, std::vector<Vertex_Point>const& neighbours1) // Is it returns equal neighbours within same molecule structure
-{
+bool Neighbours_Equal (std::vector<Vertex_Point>const& neighbours0, std::vector<Vertex_Point>const& neighbours1) { // Is it returns equal neighbours within same molecule structure
     if ( neighbours0.size() != neighbours1.size() ) { std::cout<<"\nDifferent numbers of neighbours"; return false; }
     for ( int i = 0; i < neighbours0.size(); i++ )
         if ( norm( neighbours0[i].point - neighbours1[i].point ) > distance_error )
@@ -750,19 +783,17 @@ bool Neighbours_Equal (std::vector<Vertex_Point>const& neighbours0, std::vector<
 
 bool Structures_Equal (Graph& s0, Vertex_it v0, Graph& s1, Vertex_it v1) // How it checks equalities of structure through this condition
 {
-    if ( norm( s0[ *v0 ].centre - s1[ *v1 ].centre ) > distance_error )
-    {
-        std::cout<<"\nDifferent: "<<s0[ *v0 ].centre<<s1[ *v1 ].centre; // initial vertices
+    if (norm(s0[*v0].centre - s1[*v1].centre) > distance_error) {
+        std::cout << "\nDifferent: " << s0[*v0].centre << s1[*v1].centre; // initial vertices
         return false;
     }
-    std::cout<<"\nEqual initial vertices: "<<s0[ *v0 ].centre<<s1[ *v1 ].centre;
+    std::cout<<"\nEqual initial vertices: "<<s0[*v0].centre<<s1[*v1].centre;
     std::vector<Vertex_Point> neighbours0, neighbours1;
     Order_Neighbours( s0, v0, neighbours0 );
     Order_Neighbours( s1, v1, neighbours1 );
-    if ( ! Neighbours_Equal( neighbours0, neighbours1 ) ) return false;
+    if (!Neighbours_Equal( neighbours0, neighbours1)) return false;
 
-    for ( int i = 0; i < neighbours0.size(); i++ )
-    {
+    for (int i = 0; i < neighbours0.size(); i++) {
 
     }
     return true;
@@ -771,14 +802,19 @@ bool Structures_Equal (Graph& s0, Vertex_it v0, Graph& s1, Vertex_it v1) // How 
 //ped
 void Print (Graph::edge_descriptor edge, Graph& graph)
 {
-    auto v0 = boost::source( edge, graph );
-    auto v1 = boost::target( edge, graph );
-    std::cout<<"\nv"<<graph[ v0 ].index<<graph[ v0 ].cell<<"->v"<<graph[ v1 ].index<<graph[ v1 ].cell<<" arrow="<<graph[ edge ].arrow<<" l="<<norm( graph[ edge ].arrow )<<" bonds="<<graph[ edge ].bonds.size();
+    auto v0 = boost::source(edge, graph);
+    auto v1 = boost::target(edge, graph);
+    std::cout << "\nv" << graph[ v0 ].index
+              << graph[ v0 ].cell << "->v"
+              << graph[ v1 ].index
+              << graph[ v1 ].cell
+              <<" arrow=" << graph[ edge ].arrow
+              <<" l=" << norm( graph[ edge ].arrow) << " bonds="
+              << graph[ edge ].bonds.size();
 }
 
 //pg
-void Print (Graph& graph)
-{
+void Print (Graph& graph) {
     for ( auto vertex_pair = vertices( graph ); vertex_pair.first != vertex_pair.second; ++vertex_pair.first)
     {
         auto v = *vertex_pair.first;
@@ -818,8 +854,7 @@ void Print (Graph& graph)
 
 typedef std::map< Point3i, std::map< int, Graph::vertex_descriptor >, Compare_Points3i > Vertex_map;
 
-bool Add_Vertex (Graph& graph, Vertex_map& vertices, Point3i cell, int index, Graph::vertex_descriptor& vertex)
-{
+bool Add_Vertex (Graph& graph, Vertex_map& vertices, Point3i cell, int index, Graph::vertex_descriptor& vertex) {
     auto f = vertices[ cell ].find( index );
     if ( f != vertices[ cell ].end() ) { vertex = f->second; return false; } // vertex found
     vertex = boost::add_vertex( graph );
@@ -829,110 +864,111 @@ bool Add_Vertex (Graph& graph, Vertex_map& vertices, Point3i cell, int index, Gr
     return true;
 }
 
-int main()
-{
-    std::string data_folder = "./fullCif/"; // Vitaliy's folder
+int main() {
+    std::string data_folder = "./molGeom/";
     Box box;
     std::map< Point3i, std::vector<Molecule>, Compare_Points3i > molecules; // 1st = box position, 2nd = molecules in the box
     std::vector<Hbond> Hbonds;
-    int num_structures = 3; //5688
-    std::vector<Graph> structures( num_structures );
+    std::size_t num_structures = 3; //5688  // num structures in the file
+    std::vector<Graph> structures(num_structures);
     std::multimap< Decoration, int > map_structures;
     std::map<char,int> max_indices;
     // T2 molecule info
-    max_indices.insert( std::make_pair( 'O', 3 ) );
-    max_indices.insert( std::make_pair( 'N', 6 ) );
-    max_indices.insert( std::make_pair( 'C', 23 ) );
-    max_indices.insert( std::make_pair( 'H', 14 ) );
+    // moity
+    max_indices.insert( std::make_pair('O', 3));
+    max_indices.insert( std::make_pair('N', 6));
+    max_indices.insert( std::make_pair('C', 23));
+    max_indices.insert( std::make_pair('H', 14));
 
-    for ( int ind_structure = 0; ind_structure < num_structures; ind_structure++ )
-    {
+    for (std::size_t ind_structure = 0; ind_structure < num_structures; ind_structure++ ) {
         Hbonds.clear();
         molecules.clear();
-        std::cout << "\n ------ Structure " << ind_structure + 1 << " ------\n";
+        std::cout << "\n\n ------ Structure " << ind_structure + 1 << " ------\n";
         // st1: stage 1 is to extract data from cif, then find centres and angles in the orthogonal system
-        Read_cif( data_folder + "T2_" + std::to_string( ind_structure + 1 ) + "_molGeom.cif", max_indices, box, molecules[ O3 ], Hbonds );
-                std::cout << "here" << std::endl;
-        for ( auto& m : molecules[ O3 ] )
-        {
-            //auto m = &molecules[ O3 ][ i ];
-            m.internal = true;
+
+        //Box structure
+        Read_cif(data_folder + "T2_" + std::to_string(ind_structure + 1) + "_num_molGeom.cif", max_indices, box, molecules[O3], Hbonds );
+
+        for (auto& m : molecules[O3]) {
+            //auto m = &molecules[O3][i];
+            m.internal = true; // is within box bounds
             m.centre *= 1.0 / m.atoms['C'].size();
-            m.centre = box.Abs_Position( m.centre );
+            m.centre = box.Abs_Position(m.centre);
             m.Find_Angles();
         }
-        int num_molecules = (int)molecules[ O3 ].size();
+
+        std::size_t num_molecules = molecules[O3].size();
 
         Graph graph;
         Vertex_map map_vertices;
         // st2: stage 2 is to build isolated vertices of molecules from 27 boxes in 3x3 neighbourhood
         //for ( auto s : shifts )
         Point3i s = O3; // only internal molecules
-        for ( auto& m : molecules[ s ] )
-            {
-                //molecules[i].Print(); std::cout<<" m"<<i;
-                auto vertex = boost::add_vertex( graph ); // new vertex with empty descriptor (Molecule)
-                map_vertices[ s ].insert( std::make_pair( m.index, vertex ) );
-                graph[ vertex ] = m;
-            }
+        for (auto& m : molecules[s]) {
+            //molecules[i].Print(); std::cout << " m" << i;
+            auto vertex = boost::add_vertex(graph); // new vertex with empty descriptor (Molecule)
+            map_vertices[s].insert(std::make_pair(m.index, vertex));
+            graph[vertex] = m;
+        }
 
         int ind_mol0, ind_mol1;
         Graph::vertex_descriptor v0, v1;
         std::pair<Graph::edge_descriptor, bool> edge;
         // st3: stage 3 is to convert hydrogen bonds into edges
-        for ( auto bond : Hbonds )
-        {
-            ind_mol0 = ( bond.donor_ind - 1 ) / max_indices[ 'N' ];
-            ind_mol1 = ( bond.acceptor_ind - 1 ) / max_indices[ 'O' ];
+        for (auto bond : Hbonds) {
+            ind_mol0 = (bond.donor_ind - 1) / max_indices[ 'N' ];
+            ind_mol1 = (bond.acceptor_ind - 1) / max_indices[ 'O' ];
             bond.Print();
-            std::cout << " edge: " << ind_mol0 << " -> " <<ind_mol1; //<<" cells="<<cells;
+            std::cout << " edge: " << ind_mol0 << " -> " << ind_mol1; //<<" cells="<<cells;
             std::vector<Point3i> cells{ O3 };
             if ( bond.shift != O3 ) cells.push_back( O3 - bond.shift );
-            for ( auto cell : cells )
-            {
+            for (auto cell : cells) {
                 //if ( find( shifts.begin(), shifts.end(), cell + bond.shift ) == shifts.end() ) continue; // shifted cell outside 3x3 neighbourhood
-                if ( cell == O3 ) v0 = map_vertices[ cell ][ ind_mol0 ];
-                else Add_Vertex( graph, map_vertices, cell, ind_mol0, v0 );
-                if ( cell + bond.shift == O3 ) { v1 = map_vertices[ cell + bond.shift ][ ind_mol1 ]; }
-                else Add_Vertex( graph, map_vertices, cell + bond.shift, ind_mol1, v1 );
-                std::cout<<" "<<cell<<"->"<<cell + bond.shift;
+                // for each of the end points of the Hbond that will become an edge
+                if ( cell == O3 )
+                    v0 = map_vertices[ cell ][ ind_mol0 ];
+                else
+                    Add_Vertex( graph, map_vertices, cell, ind_mol0, v0 );
 
-                edge = boost::edge( v0, v1, graph );
-                if ( ! edge.second ) // the edge didn't exist
-                {
+                if (cell + bond.shift == O3) {
+                    v1 = map_vertices[ cell + bond.shift][ind_mol1];
+                }
+                else
+                    Add_Vertex(graph, map_vertices, cell + bond.shift, ind_mol1, v1);
+
+                std::cout << " " << cell << "->" << cell + bond.shift;
+
+                edge = boost::edge(v0, v1, graph);
+                if (!edge.second ) { // the edge didn't exist
                     std::cout << "new";
                     Point3d arrow = molecules[ O3 ][ ind_mol1 ].centre - molecules[ O3 ][ ind_mol0 ].centre;
-                    if ( bond.shift != O3 ) arrow += box.Abs_Position( bond.shift );
+                    if ( bond.shift != O3 ) arrow += box.Abs_Position( bond.shift ); // vector computed assuming that the molecules are within the box
                     Edge e( arrow );
                     e.bonds.push_back( bond );
                     boost::add_edge( v0, v1, e, graph );
                 }
-                else
-                {
+                else {
                     std::cout << " extra ";
-                    graph[ edge.first ].bonds.push_back( bond );
+                    graph[edge.first].bonds.push_back( bond );
                 }
             }
 
         }
         //boost::write_graphviz( std::cout, graph );
-        Print( graph );
+        Print(graph);
 
         Decoration neighborhoods;
-        // st4: stage 4 is to build neighborhoods and stars of our/in edges around each vertex
-        for ( auto vertex_pair = vertices( graph ); vertex_pair.first != vertex_pair.second; ++vertex_pair.first)
-        {
+        // st4: stage 4 is to build neighborhoods and stars of out(N->O)/in (O->N) edges around each vertex
+        for ( auto vertex_pair = vertices( graph ); vertex_pair.first != vertex_pair.second; ++vertex_pair.first) {
             auto v = *vertex_pair.first;
             if ( ! graph[ v ].internal ) continue; //else graph[ v ].Print();
             Star star_out, star_in;
-            for ( auto out_edges = boost::out_edges( v, graph ); out_edges.first != out_edges.second; ++out_edges.first )
-            {
+            for ( auto out_edges = boost::out_edges( v, graph ); out_edges.first != out_edges.second; ++out_edges.first ) {
                 star_out.insert( std::make_pair( graph[ *out_edges.first ], *out_edges.first ) );
             }
-            for ( auto in_edges = boost::in_edges( v, graph ); in_edges.first != in_edges.second; ++in_edges.first )
-            {
+            for ( auto in_edges = boost::in_edges(v, graph); in_edges.first != in_edges.second; ++in_edges.first ) {
                 graph[ *in_edges.first ].in = true;
-                star_in.insert( std::make_pair( graph[ *in_edges.first ], *in_edges.first ) );
+                star_in.insert( std::make_pair( graph[*in_edges.first], *in_edges.first ) );
             }
             neighborhoods.insert( std::make_pair( Neighborhood( star_out, star_in ), v ) );
         }
@@ -943,10 +979,11 @@ int main()
         // st5: compute invariants of the graph
 
         structures[ ind_structure ] = graph;
-    }
+    } // for num_structures
 
 
     std::cout<<"\n";
 
     return 0;
 }
+
