@@ -216,7 +216,7 @@ std::pair<bool,bool> First_edge_smaller (Edge const& e0, Edge const& e1) {
     if (norm(e0.arrow) - tolerance_length > norm( e1.arrow )) {
         return std::make_pair( true, false );
     }
-    for ( int i = 0; i < e0.bonds.size() and i < e1.bonds.size(); i++ ) {
+    for (std::size_t i = 0; i < e0.bonds.size() and i < e1.bonds.size(); i++ ) {
         if ( e0.bonds[i].distance_HA + tolerance_length < e1.bonds[i].distance_HA ) {
             DBG_PRINT("e0 HA + tolerance < e1 HA")
             return std::make_pair( true, true );
@@ -268,7 +268,7 @@ public:
         atoms = molecule_old.atoms;
         indices_NH = molecule_old.indices_NH;
         for ( auto it = atoms.begin(); it != atoms.end(); it++ )
-            for ( int i = 0; i < it->second.size(); i++)
+            for (std::size_t i = 0; i < it->second.size(); i++)
                 it->second[i].point_abs += abs_shift;
     }
 
@@ -287,7 +287,7 @@ public:
         molecule_new.centre = centre + shift;
         molecule_new.atoms = atoms;
         for ( auto it = molecule_new.atoms.begin(); it != molecule_new.atoms.end(); it++ )
-            for ( int i = 0; i < it->second.size(); i++ )
+            for (std::size_t i = 0; i < it->second.size(); i++ )
                 it->second[i].point_abs += shift;
     }
 
@@ -302,7 +302,7 @@ public:
             carbon_angle_hor = Angle_Signed( Point2d(1,0), carbon_axis_xy );
         }
         // Find oxygen_rays;
-        for ( int i = 0; i < atoms['O'].size(); i++ )
+        for (std::size_t i = 0; i < atoms['O'].size(); i++ )
             oxygen_rays.push_back( atoms['O'][i].point_abs - centre );
 
         Matrix rotation = Eigen::MatrixXd::Identity(3,3);
@@ -639,7 +639,7 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
     std::string line, id, col1, col2, col3, col4;
     Atom atom;
     char element;
-    int ind_molecule = 0, ind_atom = 0;
+    std::size_t ind_molecule = 0, ind_atom = 0;
     double x,y,z;
     // initialise molecule parameters
     std::map<char,int> indices;
@@ -658,16 +658,16 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
     Read_Until_String( file, "_atom_site_refinement_flags" );
     // Read x,y,z coordinates of all atoms
 
-    while ( Read_idxyz( file, id, x, y, z ) )
+    while (Read_idxyz(file, id, x, y, z ))
     {
         element = id[0];
-        ind_molecule = static_cast<int>(indices[element] / max_indices[element]); // index of the current element
+        ind_molecule = static_cast<std::size_t>(indices[element] / max_indices[element]); // index of the current element
         if (ind_molecule > molecules.size()) {
-            std::cout<<"\nError in Read_cif: i_mol=" << ind_molecule << " mol_size=" << molecules.size();
+            std::cout << "\nError in Read_cif: i_mol=" << ind_molecule << " mol_size=" << molecules.size();
             return false;
         }
         if (ind_molecule == molecules.size()) {
-            molecules.push_back(Molecule((int)molecules.size()));
+            molecules.push_back(Molecule(molecules.size()));
         }
         ind_atom = ++indices[element];
         Atom atom(element, ind_atom, x, y, z);
@@ -742,10 +742,10 @@ bool Linked_NHO (Molecule& m0, Molecule& m1,double & d)  // I could not understa
 {
 
     bool linked = false;
-    for ( int i = 0; i < m0.atoms['N'].size(); i++ )
+    for (std::size_t i = 0; i < m0.atoms['N'].size(); i++ )
     {
         int index_H = m0.indices_NH[ i ].second;
-        for ( auto j = 0; j < m1.atoms['O'].size(); j++ )
+        for (std::size_t j = 0; j < m1.atoms['O'].size(); j++ )
         {
             Point3d vector_HO = m1.atoms['O'][j].point_abs - m0.atoms['H'][ index_H ].point_abs;
             double distance_HO = norm( vector_HO );
@@ -771,7 +771,7 @@ void Order_Neighbours (Graph& s, Vertex_it v, std::vector<Vertex_Point>& c) {
 
 bool Neighbours_Equal (std::vector<Vertex_Point>const& neighbours0, std::vector<Vertex_Point>const& neighbours1) { // Is it returns equal neighbours within same molecule structure
     if ( neighbours0.size() != neighbours1.size() ) { std::cout<<"\nDifferent numbers of neighbours"; return false; }
-    for ( int i = 0; i < neighbours0.size(); i++ )
+    for (std::size_t i = 0; i < neighbours0.size(); i++ )
         if ( norm( neighbours0[i].point - neighbours1[i].point ) > distance_error )
         {
             std::cout<<"\nDifferent: "<<neighbours0[i].point<<"!="<<neighbours1[i].point;
@@ -793,7 +793,7 @@ bool Structures_Equal (Graph& s0, Vertex_it v0, Graph& s1, Vertex_it v1) // How 
     Order_Neighbours( s1, v1, neighbours1 );
     if (!Neighbours_Equal( neighbours0, neighbours1)) return false;
 
-    for (int i = 0; i < neighbours0.size(); i++) {
+    for (std::size_t i = 0; i < neighbours0.size(); i++) {
 
     }
     return true;
