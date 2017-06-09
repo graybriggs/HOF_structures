@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <limits>
 #include <cstdlib>
+#include <chrono> // for code execution timing
 
 //Boost
 #define BOOST_FILESYSTEM_NO_DEPRECATED
@@ -47,7 +48,7 @@ using namespace cv;
 
 // debug
 
-#define DBG_PRINT(msg) std::cout << msg << std::endl;
+#define DBG_PRINT(msg) std::cout << msg;
 
 
 // Constants
@@ -58,6 +59,9 @@ const double length_ON = 3.07;
 const double max_angle_NHO = 100; // degrees
 const double tolerance_length = 1e-4;
 //const double tolerance_dist_HA = 1e-4;
+
+
+enum class ElementLabel { Hydrogen, Carbon, Oxygen };
 
 Point3d V(Eigen::VectorXd v) {
     return Point3d(v(0), v(1), v(2));
@@ -109,8 +113,8 @@ Matrix Cross_Product (Point3d v)
 {
     Matrix m(3,3);
     m <<
-    0,    -v.z, v.y,
-    v.z,  0,    -v.x,
+    0   ,-v.z,  v.y,
+    v.z , 0  , -v.x,
     -v.y, v.x,  0;
     return m;
 }
@@ -161,6 +165,13 @@ public:
     Point3d Abs_Position (Point3d point) { return V( matrix * V( point ) ); }
 };
 
+struct ElementSite {
+
+    ElementLabel element_lebel;
+    std::size_t THIS_NEEDS_A_NAME;
+
+};
+
 class Atom {
 public:
     char element; // C for carbon, O for oxygen
@@ -184,8 +195,7 @@ public:
     Point3i shift = O3;
     Hbond () {}
     //pb
-    void Print ()
-    {
+    void Print () {
         std::cout << "\n" << donor_elem << donor_ind << "-H" << atom_H_ind << "-" << acceptor_elem << acceptor_ind;
         std::cout << " shift=" << shift << " dist_HA=" << distance_HA;
     }
@@ -195,46 +205,54 @@ class Edge {
 public:
     Point3d arrow;
     bool in = false;
-    std::vector<Hbond> bonds;
+    std::vector<Hbond> bonds; // This Hbond is always size 1 // ??
+
     Edge () {}
-    Edge (Point3d a) { arrow = a; }
+    Edge (Point3d a) {
+        arrow = a;
+    }
+
+    void print_edge() {
+        std::cout << "Edge vector components: x=" << arrow.x << ", y=" << arrow.y << ", z=" << arrow.z << "\n";
+    }
 };
 
-std::pair<bool,bool> First_edge_smaller (Edge const& e0, Edge const& e1) {
-    if (e0.bonds.size() < e1.bonds.size() ) {
-        DBG_PRINT("First edge smaller than second")
-        return std::make_pair( true, true );
+
+// not "smaller" but has less number of edges
+std::pair<bool,bool> First_edge_smaller(Edge const& e0, Edge const& e1) {
+    //average_length_edge(e0, e1);
+    if (e0.bonds.size() < e1.bonds.size()) {
+        return std::make_pair(true, true);
     }
     if (e0.bonds.size() > e1.bonds.size()) {
-        DBG_PRINT("First edge larger than second")
-        return std::make_pair( true, false );
+        return std::make_pair(true, false);
     }
-    if (norm(e0.arrow) + tolerance_length < norm( e1.arrow )) {
-        DBG_PRINT("e0 arrow + tol < e1 arrow")
-        return std::make_pair( true, true );
+    if (norm(e0.arrow) + tolerance_length < norm(e1.arrow)) {
+        return std::make_pair(true, true);
     }
-    if (norm(e0.arrow) - tolerance_length > norm( e1.arrow )) {
-        return std::make_pair( true, false );
+    if (norm(e0.arrow) - tolerance_length > norm(e1.arrow)) {
+        return std::make_pair(true, false);
     }
     for (std::size_t i = 0; i < e0.bonds.size() and i < e1.bonds.size(); i++ ) {
         if ( e0.bonds[i].distance_HA + tolerance_length < e1.bonds[i].distance_HA ) {
-            DBG_PRINT("e0 HA + tolerance < e1 HA")
-            return std::make_pair( true, true );
+            //DBG_PRINT("e0 HA + tolerance < e1 HA")
+            return std::make_pair(true, true);
         }
         if (e0.bonds[i].distance_HA - tolerance_length > e1.bonds[i].distance_HA) {
-            DBG_PRINT("e0 HA + tolerance < e1 HA")
+            //DBG_PRINT("e0 HA + tolerance < e1 HA")
             return std::make_pair(true, false);
         }
     }
-    // TODO AVERAGE EDGE LENGTH COMPARISON
 
     //std::cout<<" E";
     return std::make_pair(false, false);
 }
 
+
+
 struct Compare_Edges {
     bool operator() (Edge const& e0, Edge const& e1) const {
-        return First_edge_smaller( e0, e1 ).second;
+        return First_edge_smaller(e0, e1).second;
     }
 };
 
@@ -243,8 +261,8 @@ public:
     int index = 0; //
     Point3i cell = O3; // the cell in the 3G grid defined by the given box
     Point3d centre = Point3d(0,0,0), c = Point3d(0,0,0), carbon_axis = Point3d(0,0,0);
-    std::map< char, std::vector<Atom> > atoms;
-    std::vector< std::pair <int, int> > indices_NH;
+    std::map<char, std::vector<Atom>> atoms;
+    std::vector<std::pair<int, int>> indices_NH;
     bool internal = false; // flag of a molecule in the given box
     double carbon_angle_ver = 0, carbon_angle_hor = 0, oxygen_angle = 0;
     std::vector<Point3d> oxygen_rays;
@@ -254,7 +272,7 @@ public:
         index = ind; internal = true;
     }
 
-    Molecule (Molecule& molecule_old, Point3i cell_shift, Point3d abs_shift, int ind)
+    Molecule(Molecule& molecule_old, Point3i cell_shift, Point3d abs_shift, int ind)
     {
         index = ind;
         cell = molecule_old.cell + cell_shift;
@@ -267,18 +285,18 @@ public:
         centre = molecule_old.centre + abs_shift;
         atoms = molecule_old.atoms;
         indices_NH = molecule_old.indices_NH;
-        for ( auto it = atoms.begin(); it != atoms.end(); it++ )
+        for (auto it = atoms.begin(); it != atoms.end(); it++)
             for (std::size_t i = 0; i < it->second.size(); i++)
                 it->second[i].point_abs += abs_shift;
     }
 
-    void Print () {
-        std::cout<<"\nv"<<index<<cell<<" centre="<<centre<<internal;
+    void Print() {
+        std::cout << "\nv" << index << cell << " centre=" << centre << internal;
         //std::cout<<" C_ver="<<carbon_angle_ver<<" C_hor="<<carbon_angle_hor<<" O_angle="<<oxygen_angle;
         //for ( int i = 0; i < indices_NH.size(); i++ ) std::cout<<"N"<<indices_NH[i].first<<" <->"<<" H"<<indices_NH[i].second<<std::endl;
     }
 
-    void Shift (Point3d shift, Molecule& molecule_new) {
+    void Shift(Point3d shift, Molecule& molecule_new) {
         // Copy angles
         molecule_new.carbon_angle_ver = carbon_angle_ver;
         molecule_new.carbon_angle_hor = carbon_angle_hor;
@@ -286,19 +304,19 @@ public:
         // Shift atoms
         molecule_new.centre = centre + shift;
         molecule_new.atoms = atoms;
-        for ( auto it = molecule_new.atoms.begin(); it != molecule_new.atoms.end(); it++ )
+        for (auto it = molecule_new.atoms.begin(); it != molecule_new.atoms.end(); it++)
             for (std::size_t i = 0; i < it->second.size(); i++ )
                 it->second[i].point_abs += shift;
     }
 
-    void Find_Angles () {
+    void Find_Angles() {
         carbon_axis = atoms['C'][0].point_abs - atoms['C'][13].point_abs;
-        if ( carbon_axis.z < 0 or ( carbon_axis.z == 0 and carbon_axis.y < 0 )
-            or ( carbon_axis.z == 0 and carbon_axis.y == 0 and carbon_axis.x < 0 )) carbon_axis *= -1; // goes upwards
+        if (carbon_axis.z < 0 or ( carbon_axis.z == 0 and carbon_axis.y < 0)
+            or (carbon_axis.z == 0 and carbon_axis.y == 0 and carbon_axis.x < 0)) carbon_axis *= -1; // goes upwards
         //std::cout<<"\ncarbon_axis="<<carbon_axis;
         carbon_angle_ver = Angle_Positive( cv::Point3d(0,0,1), carbon_axis );
-        if ( carbon_angle_ver > 0 ) {// only if carbon_axis can be projected to xy-plane
-            Point2d carbon_axis_xy( carbon_axis.x, carbon_axis.y );
+        if (carbon_angle_ver > 0) {// only if carbon_axis can be projected to xy-plane
+            Point2d carbon_axis_xy(carbon_axis.x, carbon_axis.y);
             carbon_angle_hor = Angle_Signed( Point2d(1,0), carbon_axis_xy );
         }
         // Find oxygen_rays;
@@ -369,8 +387,8 @@ bool Find_Rotation(Point3d v0, Point3d v1, Matrix& rotation) {  //What is the pu
     double angle = Angle_Positive( v0, v1 );
     rotation = Eigen::MatrixXd::Identity(3,3);
     if ( angle == 0 ) return true; // identity rotation
-    double c = cos( angle * M_PI / 180 );
-    double s = sin( angle * M_PI / 180 );
+    double c = cos(angle * M_PI / 180);
+    double s = sin(angle * M_PI / 180);
     rotation *= c;
     if ( angle == M_PI ) return true;
     Point3d axis = Cross_Product( v0, v1 );
@@ -394,16 +412,49 @@ typedef boost::graph_traits<Graph>::edge_iterator Edge_it;
 typedef boost::graph_traits<Graph>::vertex_iterator Vertex_it;
 typedef boost::property_map< Graph, boost::vertex_index_t >::type Graph_Map;
 typedef boost::graph_traits<Graph>::adjacency_iterator Adjacency_it;
-typedef std::multimap< Edge, Graph::edge_descriptor, Compare_Edges > Star;
+typedef std::multimap< Edge, Graph::edge_descriptor, Compare_Edges > Star_type;
 
-std::pair<bool,bool> First_star_smaller (Star const& s0, Star const& s1)
-{
-    std::pair<bool,bool> result;
-    for ( auto it0 = s0.begin(), it1 = s1.begin(); it0 != s0.end() and it1 != s1.end(); it0++, it1++ ) {
-        result = First_edge_smaller( it0->first, it1->first );
-        if (result.first) return result;
+
+
+class Star {
+public:
+
+    Star_type star;
+
+    Edge average_edge() const {
+        Point3d average_vector;
+
+        double x_avg, y_avg, z_avg;
+        x_avg = y_avg = z_avg = 0;
+
+        std::cout << "size: " << star.size() << "\n";
+        // sum up vector components
+        for (auto s = std::begin(star); s != std::end(star); ++s) {
+            x_avg += s->first.arrow.x;
+            y_avg += s->first.arrow.y;
+            z_avg += s->first.arrow.z;
+        }
+        // divide each component by total
+        average_vector.x = x_avg / star.size();
+        average_vector.y = y_avg / star.size();
+        average_vector.z = z_avg / star.size();
+
+        Edge e(average_vector);
+        e.print_edge();
+        return e;
     }
-    return std::make_pair( false, false );
+};
+
+
+std::pair<bool,bool> First_star_smaller(Star const& s0, Star const& s1) {
+
+    std::pair<bool,bool> result;
+    for (auto it0 = s0.star.begin(), it1 = s1.star.begin(); it0 != s0.star.end() and it1 != s1.star.end(); it0++, it1++) {
+        result = First_edge_smaller(it0->first, it1->first);
+        if (result.first)
+            return result;
+    }
+    return std::make_pair(false, false); // edges are equal
 }
 
 class Neighborhood {
@@ -411,27 +462,41 @@ public:
     Star out, in;
     Neighborhood () {}
     Neighborhood (Star out_, Star in_) {
-        out = out_; in = in_;
+        out = out_;
+        in = in_;
     }
 };
 
-std::pair<bool,bool> First_neighborhood_smaller (Neighborhood const& n0, Neighborhood const& n1) {
-    if ( n0.out.size() + n0.in.size() < n1.out.size() + n1.in.size() ) return std::make_pair( true, true ); // n0 has fewer out+in edges than n1
-    if ( n0.out.size() + n0.in.size() > n1.out.size() + n1.in.size() ) return std::make_pair( true, false );
-    if ( n0.out.size() < n1.out.size() ) return std::make_pair( true, true ); // n0 has fewer out edges than n1
-    if ( n0.out.size() > n1.out.size() ) return std::make_pair( true, false );
+std::pair<bool,bool> First_neighborhood_smaller(const Neighborhood& n0, const Neighborhood& n1) {
+    if ( n0.out.star.size() + n0.in.star.size() < n1.out.star.size() + n1.in.star.size() ) return std::make_pair( true, true ); // n0 has fewer out+in edges than n1
+    if ( n0.out.star.size() + n0.in.star.size() > n1.out.star.size() + n1.in.star.size() ) return std::make_pair( true, false );
+    if ( n0.out.star.size() < n1.out.star.size() ) return std::make_pair( true, true ); // n0 has fewer out edges than n1
+    if ( n0.out.star.size() > n1.out.star.size() ) return std::make_pair( true, false );
+    // "smaller" means less edges
+
     std::pair<bool,bool> result;
-    result = First_star_smaller( n0.out, n1.out );
-    if ( result.first ) return result;
-    result = First_star_smaller( n0.in, n1.in );
-    if ( result.first ) return result;
-    std::cout<<"\nEqual stars:";
+
+    result = First_star_smaller(n0.out, n1.out);
+    if (result.first)
+        return result;
+
+    result = First_star_smaller(n0.in, n1.in);
+    if (result.first)
+        return result;
+
+    std::cout << "\nFound Equal stars: " << std::endl;
+    Edge ein = n0.in.average_edge();
+    std::cout << "Average edge in: ";
+    ein.print_edge();
+    Edge eout = n1.in.average_edge();
+    std::cout << "Average edge out: ";
+    eout.print_edge();
     return std::make_pair( false, false );
 }
 
 struct Compare_Neighborhoods {
     bool operator() (Neighborhood const& n0, Neighborhood const& n1) const {
-        return First_neighborhood_smaller( n0, n1 ).second;
+        return First_neighborhood_smaller(n0, n1).second;
     }
 };
 typedef std::multimap< Neighborhood, Graph::vertex_descriptor, Compare_Neighborhoods > Decoration;
@@ -446,8 +511,7 @@ public:
     }
 };
 
-bool Increasing_Points(Vertex_Point const& v1, Vertex_Point const& v2)
-{
+bool Increasing_Points(Vertex_Point const& v1, Vertex_Point const& v2) {
     if (v1.point.x < v2.point.x) return true;
     if (v1.point.x > v2.point.x) return false;
     if (v1.point.y < v2.point.y) return true;
@@ -456,7 +520,7 @@ bool Increasing_Points(Vertex_Point const& v1, Vertex_Point const& v2)
     return false;
 }
 
-bool Read_Until_Section (std::fstream& file, int section) {
+bool Read_Until_Section(std::fstream& file, int section) {
     std::string line, col1 = "", col2 = "";
     while ( col1 != "#" or col2 != std::to_string( section ) + "." ) {
         if ( ! std::getline( file, line ) ) return false;
@@ -467,7 +531,7 @@ bool Read_Until_Section (std::fstream& file, int section) {
     return true;
 }
 
-bool Read_Until_String (std::fstream& file, std::string expected_word) {
+bool Read_Until_String(std::fstream& file, std::string expected_word) {
     std::string line, current_word = "";
     while ( current_word != expected_word ) {
         if ( ! std::getline( file, line ) ) return false;
@@ -541,7 +605,7 @@ bool Read_Link(std::fstream& file, char& element1, char& element2, int& id1, int
 {
     std::string line, col1, col2;
     if ( !getline( file, line ) ) return false;
-    std::istringstream stream( line );
+    std::istringstream stream(line);
     stream >> col1;
     if ( col1 == "" ) return false; // finished reading this section
         //std::cout << "--> " << get_col_number(col1) << std::endl;
@@ -658,8 +722,7 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
     Read_Until_String( file, "_atom_site_refinement_flags" );
     // Read x,y,z coordinates of all atoms
 
-    while (Read_idxyz(file, id, x, y, z ))
-    {
+    while (Read_idxyz(file, id, x, y, z )) {
         element = id[0];
         ind_molecule = static_cast<std::size_t>(indices[element] / max_indices[element]); // index of the current element
         if (ind_molecule > molecules.size()) {
@@ -704,9 +767,8 @@ bool Read_cif (std::string name, std::map<char,int>& max_indices, Box& box, std:
     Read_Until_String(file, "#D");
     Read_Until_String(file, "#");
     Hbond bond;
-    while( Read_Hbond( file, bond ) )
-    {
-        if ( bond.acceptor_elem != 'O' )
+    while(Read_Hbond(file, bond)) {
+        if (bond.acceptor_elem != 'O')
             continue;
         Hbonds.push_back(bond);
         //bond.Print();
@@ -742,11 +804,9 @@ bool Linked_NHO (Molecule& m0, Molecule& m1,double & d)  // I could not understa
 {
 
     bool linked = false;
-    for (std::size_t i = 0; i < m0.atoms['N'].size(); i++ )
-    {
+    for (std::size_t i = 0; i < m0.atoms['N'].size(); i++) {
         int index_H = m0.indices_NH[ i ].second;
-        for (std::size_t j = 0; j < m1.atoms['O'].size(); j++ )
-        {
+        for (std::size_t j = 0; j < m1.atoms['O'].size(); j++) {
             Point3d vector_HO = m1.atoms['O'][j].point_abs - m0.atoms['H'][ index_H ].point_abs;
             double distance_HO = norm( vector_HO );
             //std::cout<<"\nN"<<m0.atoms['N'][i].index<<"H"<<index_H+1<<"O"<<m1.atoms['O'][j].index<<"="<<distance_HO;
@@ -781,7 +841,7 @@ bool Neighbours_Equal (std::vector<Vertex_Point>const& neighbours0, std::vector<
     return true;
 }
 
-bool Structures_Equal (Graph& s0, Vertex_it v0, Graph& s1, Vertex_it v1) // How it checks equalities of structure through this condition
+bool Structures_Equal(Graph& s0, Vertex_it v0, Graph& s1, Vertex_it v1) // How it checks equalities of structure through this condition
 {
     if (norm(s0[*v0].centre - s1[*v1].centre) > distance_error) {
         std::cout << "\nDifferent: " << s0[*v0].centre << s1[*v1].centre; // initial vertices
@@ -815,7 +875,7 @@ void Print (Graph::edge_descriptor edge, Graph& graph)
 
 //pg
 void Print (Graph& graph) {
-    for ( auto vertex_pair = vertices( graph ); vertex_pair.first != vertex_pair.second; ++vertex_pair.first)
+    for ( auto vertex_pair = vertices(graph); vertex_pair.first != vertex_pair.second; ++vertex_pair.first)
     {
         auto v = *vertex_pair.first;
         graph[ v ].Print( );
@@ -852,9 +912,9 @@ void Print (Graph& graph) {
     }
 }
 
-typedef std::map< Point3i, std::map< int, Graph::vertex_descriptor >, Compare_Points3i > Vertex_map;
+typedef std::map<Point3i, std::map<int, Graph::vertex_descriptor>, Compare_Points3i> Vertex_map;
 
-bool Add_Vertex (Graph& graph, Vertex_map& vertices, Point3i cell, int index, Graph::vertex_descriptor& vertex) {
+bool Add_Vertex(Graph& graph, Vertex_map& vertices, Point3i cell, int index, Graph::vertex_descriptor& vertex) {
     auto f = vertices[ cell ].find( index );
     if ( f != vertices[ cell ].end() ) { vertex = f->second; return false; } // vertex found
     vertex = boost::add_vertex( graph );
@@ -869,9 +929,9 @@ int main() {
     Box box;
     std::map< Point3i, std::vector<Molecule>, Compare_Points3i > molecules; // 1st = box position, 2nd = molecules in the box
     std::vector<Hbond> Hbonds;
-    std::size_t num_structures = 3; //5688  // num structures in the file
+    std::size_t num_structures = 3; //5688;  // num structures in the file
     std::vector<Graph> structures(num_structures);
-    std::multimap< Decoration, int > map_structures;
+    std::multimap<Decoration, int> map_structures;
     std::map<char,int> max_indices;
     // T2 molecule info
     // moity
@@ -879,6 +939,10 @@ int main() {
     max_indices.insert( std::make_pair('N', 6));
     max_indices.insert( std::make_pair('C', 23));
     max_indices.insert( std::make_pair('H', 14));
+
+
+    // Record start time
+    auto start = std::chrono::high_resolution_clock::now();
 
     for (std::size_t ind_structure = 0; ind_structure < num_structures; ind_structure++ ) {
         Hbonds.clear();
@@ -901,6 +965,7 @@ int main() {
 
         Graph graph;
         Vertex_map map_vertices;
+
         // st2: stage 2 is to build isolated vertices of molecules from 27 boxes in 3x3 neighbourhood
         //for ( auto s : shifts )
         Point3i s = O3; // only internal molecules
@@ -916,22 +981,25 @@ int main() {
         std::pair<Graph::edge_descriptor, bool> edge;
         // st3: stage 3 is to convert hydrogen bonds into edges
         for (auto bond : Hbonds) {
-            ind_mol0 = (bond.donor_ind - 1) / max_indices[ 'N' ];
-            ind_mol1 = (bond.acceptor_ind - 1) / max_indices[ 'O' ];
+            ind_mol0 = (bond.donor_ind - 1) / max_indices['N'];
+            ind_mol1 = (bond.acceptor_ind - 1) / max_indices['O'];
             bond.Print();
             std::cout << " edge: " << ind_mol0 << " -> " << ind_mol1; //<<" cells="<<cells;
             std::vector<Point3i> cells{ O3 };
-            if ( bond.shift != O3 ) cells.push_back( O3 - bond.shift );
+
+            if (bond.shift != O3)
+                cells.push_back(O3 - bond.shift);
+
             for (auto cell : cells) {
                 //if ( find( shifts.begin(), shifts.end(), cell + bond.shift ) == shifts.end() ) continue; // shifted cell outside 3x3 neighbourhood
                 // for each of the end points of the Hbond that will become an edge
-                if ( cell == O3 )
-                    v0 = map_vertices[ cell ][ ind_mol0 ];
+                if (cell == O3)
+                    v0 = map_vertices[cell][ind_mol0];
                 else
-                    Add_Vertex( graph, map_vertices, cell, ind_mol0, v0 );
+                    Add_Vertex(graph, map_vertices, cell, ind_mol0, v0);
 
                 if (cell + bond.shift == O3) {
-                    v1 = map_vertices[ cell + bond.shift][ind_mol1];
+                    v1 = map_vertices[cell + bond.shift][ind_mol1];
                 }
                 else
                     Add_Vertex(graph, map_vertices, cell + bond.shift, ind_mol1, v1);
@@ -942,14 +1010,14 @@ int main() {
                 if (!edge.second ) { // the edge didn't exist
                     std::cout << "new";
                     Point3d arrow = molecules[ O3 ][ ind_mol1 ].centre - molecules[ O3 ][ ind_mol0 ].centre;
-                    if ( bond.shift != O3 ) arrow += box.Abs_Position( bond.shift ); // vector computed assuming that the molecules are within the box
+                    if (bond.shift != O3) arrow += box.Abs_Position(bond.shift); // vector computed assuming that the molecules are within the box
                     Edge e( arrow );
                     e.bonds.push_back( bond );
                     boost::add_edge( v0, v1, e, graph );
                 }
                 else {
                     std::cout << " extra ";
-                    graph[edge.first].bonds.push_back( bond );
+                    graph[edge.first].bonds.push_back(bond);
                 }
             }
 
@@ -957,24 +1025,27 @@ int main() {
         //boost::write_graphviz( std::cout, graph );
         Print(graph);
 
+        // Create edges for a star
+
         Decoration neighborhoods;
         // st4: stage 4 is to build neighborhoods and stars of out(N->O)/in (O->N) edges around each vertex
-        for ( auto vertex_pair = vertices( graph ); vertex_pair.first != vertex_pair.second; ++vertex_pair.first) {
+        for (auto vertex_pair = vertices(graph); vertex_pair.first != vertex_pair.second; ++vertex_pair.first) {
             auto v = *vertex_pair.first;
-            if ( ! graph[ v ].internal ) continue; //else graph[ v ].Print();
+            if (!graph[v].internal)
+                continue; //else graph[ v ].Print();
             Star star_out, star_in;
-            for ( auto out_edges = boost::out_edges( v, graph ); out_edges.first != out_edges.second; ++out_edges.first ) {
-                star_out.insert( std::make_pair( graph[ *out_edges.first ], *out_edges.first ) );
+            for (auto out_edges = boost::out_edges(v, graph); out_edges.first != out_edges.second; ++out_edges.first ) {
+                star_out.star.insert(std::make_pair(graph[*out_edges.first], *out_edges.first));
             }
-            for ( auto in_edges = boost::in_edges(v, graph); in_edges.first != in_edges.second; ++in_edges.first ) {
+            for (auto in_edges = boost::in_edges(v, graph); in_edges.first != in_edges.second; ++in_edges.first) {
                 graph[ *in_edges.first ].in = true;
-                star_in.insert( std::make_pair( graph[*in_edges.first], *in_edges.first ) );
+                star_in.star.insert(std::make_pair(graph[*in_edges.first], *in_edges.first));
             }
-            neighborhoods.insert( std::make_pair( Neighborhood( star_out, star_in ), v ) );
+            neighborhoods.insert(std::make_pair(Neighborhood(star_out, star_in), v));
         }
-        std::cout<<"\nNeighborhoods";
-        for ( auto n : neighborhoods )
-            graph[ n.second ].Print( );
+        std::cout << "\nNeighborhoods";
+        for (auto n : neighborhoods)
+            graph[ n.second ].Print();
 
         // st5: compute invariants of the graph
 
@@ -982,7 +1053,13 @@ int main() {
     } // for num_structures
 
 
-    std::cout<<"\n";
+    // Record end time
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+
+    std::cout << "\n\nExecution took " << elapsed.count() << "seconds" << std::endl;
+
+    std::cout << "\n";
 
     return 0;
 }
