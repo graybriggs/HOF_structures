@@ -141,7 +141,7 @@ Matrix Cross_Product (Point3d v)
     return m;
 }
 
-Matrix Tensor_Product (Point3d v)
+Matrix Tensor_Product(Point3d v)
 {
     Matrix m(3,3);
     m <<
@@ -196,7 +196,7 @@ enum class ElementLabel { Hydrogen, Carbon, Oxygen };
 struct ElementSite {
 
     ElementLabel element_lebel;
-    std::size_t THIS_NEEDS_A_NAME;
+    std::size_t connectors;
 
 };
 
@@ -223,6 +223,7 @@ public:
     int donor_ind, atom_H_ind, acceptor_ind;
     double distance_HA = 0;  // distance of the Hydrogen acceptor
     Point3i shift = O3;
+    double angle_to_c_axis;
     Hbond () {}
     //pb
     void Print () {
@@ -237,6 +238,8 @@ public:
     Point3d arrow;
     bool in = false;
     std::vector<Hbond> bonds; // This Hbond is always size 1 // ??
+
+    Point3d carbon_axis;
 
     Edge () {}
     Edge (Point3d a) {
@@ -261,6 +264,62 @@ public:
     }
 };
 
+
+double dot_product_angle(const Point3d &v1, const Point3d &v2) {
+    float len1 = sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z);
+    float len2 = sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z);
+
+    float dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z; // v1.dot( v2 ) / norm(v1)
+
+    float a = dot / (len1 * len2);
+
+    return std::acos(a); // 0..PI
+}
+
+std::vector<double> carbon_axis_hbond_angle(Edge& edge) {
+
+    std::vector<double> angles;
+    Point3d c_axis = edge.carbon_axis;
+
+    std::size_t edge_num = 0;
+    for (auto& hbond : edge.bonds) {
+        std::cout << "Edge " << edge_num << ": ";
+        double angle_rad = dot_product_angle(c_axis, edge.arrow);
+        double angle_deg = RAD2DEG(angle_rad);
+
+        if (angle_deg > 90) {
+            double corrected_angle = 180 - angle_deg;
+            std::cout << "ANGLE between carbon axis and Hbond: " << corrected_angle << "\n";
+            angles.push_back(corrected_angle);
+            hbond.angle_to_c_axis = corrected_angle;
+        }
+        else {
+            std::cout << "ANGLE between carbon axis and Hbond: " << angle_deg << "\n";
+            hbond.angle_to_c_axis = angle_deg;
+            angles.push_back(angle_deg);
+        }
+        ++edge_num;
+    }
+    return angles;
+}
+
+/*
+bool search_for_similar_angles(const std::vector<double>& vec_angles, double tolerance = 0.5) {
+
+    bool similarity_flag = false;
+
+    for (auto& v0 : vec_angles) {
+        for (auto& v1 : vec_angles) {
+            if (relative_difference(v0, v1) <= tolerance) {
+                std::cout << "Similar: " << relative_difference(v0, v1) << std::endl;
+            }
+        }
+    }
+    return similarity_flag;
+}
+*/
+
+
 /*
 For edges' Hbond size.
 T T
@@ -272,7 +331,7 @@ T F
 */
 
 // not "smaller" but has less number of edges
-std::pair<bool,bool> First_edge_smaller(Edge const& e0, Edge const& e1) {
+std::pair<bool,bool> First_edge_smaller(const Edge& e0, const Edge& e1) {
     //average_length_edge(e0, e1);
     if (e0.bonds.size() < e1.bonds.size()) {
         return std::make_pair(true, true);
@@ -299,6 +358,9 @@ std::pair<bool,bool> First_edge_smaller(Edge const& e0, Edge const& e1) {
             return std::make_pair(true, false);
         }
     }
+
+    // compare hbond angles with their associated carbon atom here
+
 
     //std::cout<<" E";
     return std::make_pair(false, false);
@@ -522,56 +584,6 @@ public:
         return e;
     }
 
-
-    double dot_product_angle(const Point3d &v1, const Point3d &v2) const {
-        float len1 = sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z);
-        float len2 = sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z);
-
-        float dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
-
-        float a = dot / (len1 * len2);
-
-        return std::acos(a); // 0..PI
-    }
-
-    std::vector<double> angles_between_edges() const {
-
-        std::vector<double> angles;
-        Point3d carbon_axis = molecule->carbon_axis;
-
-        std::size_t edge_num = 0;
-        for (auto& edge : star) {
-            std::cout << "Edge " << edge_num << ": ";
-            double angle_rad = dot_product_angle(carbon_axis, (edge.first).arrow);
-            double angle_deg = RAD2DEG(angle_rad);
-
-            if (angle_deg <= 90) {
-                double ang = 180 - angle_deg;
-                std::cout << "ANGLE between carbon axis and Hbond: " << ang << "\n";
-                angles.push_back(ang);
-            }
-            else {
-                std::cout << "ANGLE between carbon axis and Hbon: " << angle_deg << "\n";
-                angles.push_back(angle_deg);
-            }
-            ++edge_num;
-        }
-        return angles;
-    }
-
-    bool search_for_similar_angles(const std::vector<double>& vec_angles, double tolerance = 0.5) const {
-
-        bool similarity_flag = false;
-
-        for (auto& v0 : vec_angles) {
-            for (auto& v1 : vec_angles) {
-                if (relative_difference(v0, v1) <= tolerance) {
-                    std::cout << "Similar: " << relative_difference(v0, v1) << std::endl;
-                }
-            }
-        }
-        return similarity_flag;
-    }
 };
 
 
@@ -649,10 +661,11 @@ std::pair<bool,bool> First_neighborhood_smaller(const Neighborhood& n0, const Ne
 
     std::cout << "RESULT: " << result.first << ", " << result.second << std::endl;
 
+    /* OLD
     std::vector<double> angs = n0.in.angles_between_edges();
     n0.in.search_for_similar_angles(angs);
     n1.in.angles_between_edges();
-
+    */
     return result;
 }
 
@@ -1151,6 +1164,10 @@ int main() {
         Read_cif(data_folder + "T2_" + std::to_string(ind_structure + 1) + "_num_molGeom.cif", max_indices, box, molecules[O3], Hbonds );
 
 
+
+        ///
+        Point3d CARBON_AXIS;
+        ///
         // why is this here?
         //molecules[O3] is the (0,0,0) central box position.
         // we want to iterate through all molecules in that (0,0,0) box
@@ -1161,7 +1178,9 @@ int main() {
             m.centre *= 1.0 / m.atoms['C'].size();
             m.centre = box.Abs_Position(m.centre);
             m.Find_Angles();
+            CARBON_AXIS = m.carbon_axis;
         }
+
 
         std::size_t num_molecules = molecules[O3].size();
         std::cout << num_molecules << " molecules in box " << std::endl;
@@ -1217,6 +1236,9 @@ int main() {
                     // compute carbon angle for the arrow
                     Edge e( arrow );
                     e.bonds.push_back( bond );
+                    // ADD CARBON AXIS HERE: e.carbon_axis
+                    e.carbon_axis = CARBON_AXIS;
+                    carbon_axis_hbond_angle(e); // edge is now modified here. Could be setup like: e = carbon_axis_hbond_angle(e);
                     boost::add_edge( v0, v1, e, graph );
                 }
                 else {
@@ -1254,29 +1276,6 @@ int main() {
             ++molecule_number;
         }
         std::cout << "\nNeighborhoods";
-
-
-
-        // processing logic
-        for (auto& n : neighborhoods) {
-
-            // for each of the stars in the neighbourhood, check their hbond vector element size
-            for (auto& s : (n.first).in.star) {
-                if ((s.first).hbonds_not_size_one()) {
-                    std::cout << "HBond not size one in structure " << ind_structure << "\n";
-                }
-            }
-
-            /*
-
-            Edge av_arrow_in = n.star_in.arrow_average();
-            Edge av_arrow_out = n.star_out.arrow_average();
-
-            if (av_arrow_in.edge_arrow_equal(av_arrow_out)) {
-                std::cout << "Average arrow equal on structure number: " << ind_structure << "\n";
-            }
-            */
-        }
 
 
         /*
