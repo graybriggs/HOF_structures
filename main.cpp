@@ -289,12 +289,12 @@ std::vector<double> carbon_axis_hbond_angle(Edge& edge) {
 
         if (angle_deg > 90) {
             double corrected_angle = 180 - angle_deg;
-            std::cout << "ANGLE between carbon axis and Hbond: " << corrected_angle << "\n";
+            //std::cout << "ANGLE between carbon axis and Hbond: " << corrected_angle << "\n";
             angles.push_back(corrected_angle);
             hbond.angle_to_c_axis = corrected_angle;
         }
         else {
-            std::cout << "ANGLE between carbon axis and Hbond: " << angle_deg << "\n";
+            //std::cout << "ANGLE between carbon axis and Hbond: " << angle_deg << "\n";
             hbond.angle_to_c_axis = angle_deg;
             angles.push_back(angle_deg);
         }
@@ -347,6 +347,8 @@ std::pair<bool,bool> First_edge_smaller(const Edge& e0, const Edge& e1) {
     }
 
 
+    std::cout << "e0 h-bond size: " << e0.bonds.size() << "\n";
+    std::cout << "e1 h-bond size: " << e1.bonds.size() << "\n";
     // compare the distance of the HA
     for (std::size_t i = 0; i < e0.bonds.size() && i < e1.bonds.size(); i++ ) {
         if ( e0.bonds[i].distance_HA + tolerance_length < e1.bonds[i].distance_HA ) {
@@ -361,6 +363,10 @@ std::pair<bool,bool> First_edge_smaller(const Edge& e0, const Edge& e1) {
 
     // compare hbond angles with their associated carbon atom here
 
+    std::cout << "Edge 0 c-axis h-bond angles:\n";
+    for (auto& hb : e0.bonds) {
+        std::cout << "ANGLE TO C-AXIS: " << hb.angle_to_c_axis << std::endl;
+    }
 
     //std::cout<<" E";
     return std::make_pair(false, false);
@@ -552,7 +558,7 @@ class Star {
 public:
 
     mutable Molecule* molecule;
-    Point3d carbon_axis; // initialise this with axis
+    //Point3d carbon_axis; // initialise this with axis
     Star_type star;
     mutable Edge average_arrow_vector; // LOOK HERE! MUTABLE IS THE ONLY WAY AROUND THIS PROBLEM.
 
@@ -585,8 +591,6 @@ public:
     }
 
 };
-
-
 
 
 std::pair<bool,bool> First_star_smaller(const Star& s0, const Star& s1) {
