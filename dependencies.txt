@@ -1,0 +1,12 @@
+Downloads:
+
+ucif parser:
+
+svn co svn://svn.code.sf.net/p/cctbx/code/trunk/ucif ucif
+
+(http://cctbx.sourceforge.net/ucif/)
+(R. J. Gildea, L. J. Bourhis, O. V. Dolomanov, R. W. Grosse-Kunstleve, H. Puschmann, P. D. Adams and J. A. K. Howard: iotbx.cif: a comprehensive CIF toolbox. J. Appl. Cryst. (2011). 44, 1259-1263.)
+
+Dependencies:
+
+apt-get install libantlrc3-dev
