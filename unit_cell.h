@@ -10,20 +10,8 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/SparseCore>
 #include <eigen3/Eigen/SparseCholesky>
-typedef Eigen::VectorXd Vector;
-typedef Eigen::MatrixXd Matrix;
 
-
-// Point from vector; Vector from point
-cv::Point3d V(Eigen::VectorXd v) {
-    return cv::Point3d(v(0), v(1), v(2));
-}
-
-Eigen::VectorXd V(cv::Point3d v) {
-    Eigen::VectorXd vector(3);
-    vector << v.x, v.y, v.z;
-    return vector;
-}
+#include "math_helper.h"
 
 
 

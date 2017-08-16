@@ -93,7 +93,8 @@ bool Read_Link(std::fstream& file, char& element1, char& element2, int& id1, int
     if ( !getline( file, line ) ) return false;
     std::istringstream stream(line);
     stream >> col1;
-    if ( col1 == "" ) return false; // finished reading this section
+    if (col1 == "")
+        return false; // finished reading this section
         //std::cout << "--> " << get_col_number(col1) << std::endl;
     stream >> col2;
     element1 = col1[0]; // the first character in the string is the chemical element
@@ -121,12 +122,12 @@ bool Read_Link(std::fstream& file, char& element1, char& element2, int& id1, int
 bool Read_Hbond(std::fstream& file, HBond& bond)
 {
     std::string line, col1, col2, col3;
-    if (!getline(file, line))
+    if (!std::getline(file, line))
         return false;
 
     std::istringstream stream(line);
     stream >> col1;
-    if (col1 == "")
+    if (col1.empty()) // col1 == ""
         return false; // finished reading this section
 
     stream >> col2 >> col3;
@@ -148,6 +149,9 @@ bool Read_Hbond(std::fstream& file, HBond& bond)
 
     if (bond.acceptor_element != ElementLabel::Oxygen)
         return true;
+
+    //if (bond.acceptor_element != ElementLabel::Oxygen)
+      //  return true;
 
     // 1
     std::string str_num1 = get_col_number(col1);
@@ -179,6 +183,9 @@ bool Read_Hbond(std::fstream& file, HBond& bond)
         bond.shift = O3;
         return true;
     } // both N, O are in the same box
+    // code 4 = shift -1
+    // code 5 = shift 0
+    // code 6 = shift 1
     bond.shift.x = col1.at(2) - '4' - 1; // code 5 means shift 0
     bond.shift.y = col1.at(3) - '4' - 1;
     bond.shift.z = col1.at(4) - '4' - 1;
@@ -203,21 +210,21 @@ bool read_cif(std::string name, std::map<char,int>& max_indices, UnitCell& box, 
 
 
     std::map<char,int> indices;
-    for ( auto i : max_indices )
+    for (auto i : max_indices)
         indices.insert(std::make_pair(i.first, 0));
 
 
 
     // Read box parameters
     Read_Until_Section( file, 6 );
-    Read_String_Value( file, "_cell_length_a", box.a );
-    Read_String_Value( file, "_cell_length_b", box.b );
-    Read_String_Value( file, "_cell_length_c", box.c );
-    Read_String_Value( file, "_cell_angle_alpha", box.alpha );
-    Read_String_Value( file, "_cell_angle_beta", box.beta );
-    Read_String_Value( file, "_cell_angle_gamma", box.gamma );
+    Read_String_Value(file, "_cell_length_a", box.a);
+    Read_String_Value(file, "_cell_length_b", box.b);
+    Read_String_Value(file, "_cell_length_c", box.c);
+    Read_String_Value(file, "_cell_angle_alpha", box.alpha);
+    Read_String_Value(file, "_cell_angle_beta", box.beta);
+    Read_String_Value(file, "_cell_angle_gamma", box.gamma);
     box.find_matrix();
-    Read_Until_String( file, "_atom_site_refinement_flags" );
+    Read_Until_String(file, "_atom_site_refinement_flags");
     // Read x,y,z coordinates of all atoms
 
 
@@ -236,12 +243,12 @@ bool read_cif(std::string name, std::map<char,int>& max_indices, UnitCell& box, 
         Atom atom(to_element_index(element, ind_atom), x, y, z);
 
         // relative atom positions to box
-        atom.point_abs = box.abs_position( atom.point_box );
+        atom.point_abs = box.abs_position(atom.point_box);
         molecules[ind_molecule].atoms[element].push_back(atom);
         if (element == 'C') {
             molecules[ind_molecule].centre += atom.point_box;
             int ind = ind_atom - ind_molecule * max_indices[element];
-            if (ind == 1 or ind == 14)
+            if (ind == 1 || ind == 14)
                 molecules[ind_molecule].c += atom.point_box;
         }
     }
@@ -263,16 +270,16 @@ bool read_cif(std::string name, std::map<char,int>& max_indices, UnitCell& box, 
     }
         */
 
-
-
     // Read hydrogen bonds between molecules
     Read_Until_String(file, "_geom_hbond_publ_flag");
     Read_Until_String(file, "#D");
     Read_Until_String(file, "#");
     HBond bond;
     while(Read_Hbond(file, bond)) {
-        if (bond.acceptor_element != ElementLabel::Oxygen)
-            Hbonds.push_back(bond);
+        if (bond.acceptor_element != ElementLabel::Oxygen) {
+            continue;
+        }
+        Hbonds.push_back(bond);
     }
 
     box.n_molecules = molecules.size();

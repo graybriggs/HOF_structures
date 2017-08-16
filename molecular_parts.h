@@ -6,6 +6,7 @@
 #include <utility>
 #include <iostream>
 
+#include "eigen3/Eigen/Core"
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -50,6 +51,7 @@ ElementLabel to_element(char c) {
     case 'H':
         return ElementLabel::Hydrogen;
     }
+    return ElementLabel::ELEMENT_MAX;
 }
 
 std::map<ElementLabel, std::size_t> max_indices;
@@ -80,6 +82,8 @@ struct Atom {
     }
 };
 
+//////////
+
 struct HBond {
 
     // read from _geom_hbond_publ_flag in .cif file, section #10
@@ -100,16 +104,35 @@ struct HBond {
 
 };
 
+
+
+/////////////////////////
+
 struct Edge {
+    //cv::Vec3d arrow;
     cv::Point3d arrow;
+
     bool in_edge = false;
     std::vector<HBond> hbonds; // This Hbond is always size 1 // ??
 
     cv::Point3d carbon_axis;
 
-    Edge() {}
-    explicit Edge(const cv::Point3d a) {
-        arrow = a;
+    Edge()
+        :
+       arrow(cv::Point3d(0,0,0))
+    {
+    }
+    explicit Edge(const cv::Point3d a)
+        : arrow(a)
+    {
+    }
+
+    void set_arrow(const cv::Vec3d& arr) {
+        arrow = arr;
+    }
+
+    void set_arrow(const cv::Point3d& arr) {
+        arrow = arr;
     }
 
     bool hbonds_not_size_one() const {
@@ -120,7 +143,6 @@ struct Edge {
         return arrow == in_arrow.arrow;
     }
 };
-
 
 
 struct Molecule {
@@ -190,7 +212,7 @@ struct Molecule {
 
         std::vector<Eigen::VectorXd> oxygen_vectors(3);
         for ( int i = 0; i < 3; i++ )
-            oxygen_vectors[i] = rotation * V( oxygen_rays[i] );
+            oxygen_vectors[i] = rotation * V(oxygen_rays[i]);
 
         // Find 3 angles with oxygen rays
         int min_index = -1;
@@ -224,6 +246,31 @@ void init_molecular_parts() {
     init_max_indices();
 }
 
+////// MOLECULE CALCULATIONS
+
+std::vector<double> carbon_axis_hbond_angle(Edge& edge) {
+
+    std::vector<double> angles;
+    cv::Point3d c_axis = edge.carbon_axis;
+
+    std::size_t edge_num = 0;
+    for (auto& hbond : edge.hbonds) {
+        double angle_rad = dot_product_angle(c_axis, edge.arrow);
+        double angle_deg = deg_to_rad(angle_rad);
+
+        if (angle_deg > 90) {
+            double corrected_angle = 180 - angle_deg;
+            angles.push_back(corrected_angle);
+            hbond.angle_to_carbon_axis = corrected_angle;
+        }
+        else {
+            hbond.angle_to_carbon_axis = angle_deg;
+            angles.push_back(angle_deg);
+        }
+        ++edge_num;
+    }
+    return angles;
+}
 
 
 #endif // MOLECULAR_PARTS_H

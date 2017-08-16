@@ -1,23 +1,113 @@
 #ifndef ANALYSIS_H
 #define ANALYSIS_H
 
+#include "graph_decoration.h"
+
 // neighbourhood analysis
 // star analysis
 
+// Comapares the number of input and output edges for a star
+bool check_neighborhood_inout_edges(Neighborhood& nh) {
 
-// Neighbourhoods?
-void check_num_hbonds(const Star& star) {
+    // compare num in edges to out edges
+    std::size_t num_in = nh.in.num_edges();
+    std::size_t num_out = nh.out.num_edges();
 
-
-
+    if (num_in != num_out)
+        std::cout << "Edge numbers different, in: " << num_in << ", out: " << num_out << "\n";
+    else
+        std::cout << "Edge numbers match, in: " << num_in << ", out: " << num_out << "\n";
 }
 
 
-void do_analysis(const Star& star) {
+// a Hbonds is a N-O bond with N being the donator and O being the acceptor.
+// usually this bond is kept in a list for size of 1. If the size varies then there
+// must be more (or less) of these bonds. This function checks for this variance.
+void check_num_hbonds(Star& star) {
 
-    check_num_hbonds(star);
+    bool is_good = true;
+
+    for (auto hb : star.star) {
+        //Edge e = hb.second;
+        Edge e = hb.edge;
+        std::size_t hb_sz = e.hbonds.size();
+        if (hb_sz != 1) {
+            std::cout << "Hbond anomaly" << std::endl;
+            if (e.hbonds.size() > hb_sz) {
+                std::cout << "Hbond greater than 1. Size: " << hb_sz << "\n";
+                is_good = false;
+            }
+            else {
+                std::cout << "No Hbond exists \n";
+                is_good = false;
+            }
+        }
+    }
+    if (is_good)
+        std::cout << "HBonds normal." << std::endl;
+}
+
+void check_edge_averages(Star& star) {
+    Edge edge;
+    if (!star.arrow_average(edge))
+        std::cout << "Unable to calculate arrow average - 0 edges\n";
+
+    std::cout << "Star Average Edge: " << edge.arrow << std::endl;
+}
+
+void analyse_star(Star& s) {
+
+    check_num_hbonds(s);
+    check_edge_averages(s);
+}
+
+// get all star sizes and sort them into order.
+void compare_stars_out_edges(Neighborhood& neighborhood) {
+
+    // = neighborhood.out.num_edges();
 
 }
+
+void compare_stars_in_edges(const Neighborhood& n) {
+
+}
+
+void analyse(VertexNeighborhood vn) {
+
+    Neighborhood n = vn.neighborhood;
+
+    check_neighborhood_inout_edges(n);
+
+    std::cout << "--- In star ---\n";
+    analyse_star(n.in);
+    std::cout << "--- Out star ---\n";
+    analyse_star(n.out);
+}
+
+void do_analysis(Decoration& neighbor, std::size_t structure_num) {
+
+    std::cout << "\nAnalysing structure number: " << structure_num << "\n\n";
+
+    std::vector<Neighborhood> n; // hold organised neighborhoods?
+
+    std::cout << "Analysing maximum " << neighbor.size() << " stars...\n";
+    std::size_t star_num = 0;
+    for (auto& d : neighbor)  {
+        std::cout << "Star num: " << star_num + 1 << "\n";
+        analyse(d);
+        ++star_num;
+    }
+}
+
+
+// --- star sizes
+//
+
+
+
+
+
+
 
 // This is interesting dead code found in the original source
 /*

@@ -36,12 +36,11 @@ void populate_datastructures(const std::string& file_name, DataStructures& ds) {
     std::vector<HBond> hbonds;
    // std::vector<Graph> structures(num_structures);
     //std::multimap<Decoration, int> map_structures; // what is the int supposed to represent?
-    std::map<char, int> max_indices;
 
     // T2 molecule info
     // moiety
     // this is essentially saying the amount of these types of molecules exist
-
+    std::map<char, int> max_indices;
     max_indices['O'] = 3;
     max_indices['N'] = 6;
     max_indices['C'] = 23;
@@ -51,6 +50,8 @@ void populate_datastructures(const std::string& file_name, DataStructures& ds) {
 
     ds.cell = cell;
 
+
+    // initialise central molecules
     for (auto& mol : molecules[O3]) {
         mol.internal = true;
         mol.centre *= 1.0 / mol.atoms['C'].size();
@@ -59,8 +60,6 @@ void populate_datastructures(const std::string& file_name, DataStructures& ds) {
     }
 
     ds.molecules[O3] = molecules[O3];
-
-    std::cout << "mol size: " << molecules[O3].size() << std::endl;
     ds.hbonds = hbonds;
 }
 
